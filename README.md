@@ -91,9 +91,7 @@ npm install @kaspa/swap-widget
                     console.log('Wallet connected:', walletAddress);
                 },
                 onDisconnectWallet: () => console.log('wallet disconnected'),
-                onGetTokens: async () => {
-                    return startingTokens;
-                },
+                initialTokens: startingTokens,
                 onSwapSuccess: async (hash) => {
                     console.log('Swap success:', hash);
                     alert('Swap success: ' + hash);

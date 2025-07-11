@@ -196,29 +196,16 @@ export class SwapWidget {
         }
     }
     async loadInitialData() {
-        // Load tokens if provided
-        if (this.options.onGetTokens) {
-            try {
-                const tokens = await this.options.onGetTokens();
-                // Set default tokens if available
-                if (tokens.length > 0) {
-                    this.sellToken = tokens[0];
-                    if (tokens.length > 1) {
-                        this.buyToken = tokens[1];
-                    }
-                    this.allTokens = tokens;
-                    this.updateTokenDisplay();
-                    this.updateBalances();
-                }
+        // Load tokens if provided as initialTokens
+        if (this.options.initialTokens && this.options.initialTokens.length > 0) {
+            const tokens = this.options.initialTokens;
+            this.sellToken = tokens[0];
+            if (tokens.length > 1) {
+                this.buyToken = tokens[1];
             }
-            catch (error) {
-                console.error('Error loading tokens:', error);
-                const errorMessage = error instanceof Error ? error.message : 'Failed to load tokens';
-                this.state.error = errorMessage;
-                if (this.options.onErrorEvent) {
-                    this.options.onErrorEvent(errorMessage);
-                }
-            }
+            this.allTokens = tokens;
+            this.updateTokenDisplay();
+            this.updateBalances();
         }
         else {
             // Fetch tokens from the graph if onGetTokens is not provided

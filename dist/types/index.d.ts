@@ -38,7 +38,7 @@ export interface SwapWidgetOptions {
     onSwapError?: (error: string) => void;
     onConnectWallet?: (walletAddress: string) => void;
     onDisconnectWallet?: () => void;
-    onGetTokens?: () => Promise<Erc20Token[]>;
+    initialTokens?: Erc20Token[];
     onGetTokenBalance?: (tokenAddress: string) => Promise<string>;
     onErrorEvent?: (error: string) => void;
 }

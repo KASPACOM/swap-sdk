@@ -32979,26 +32979,15 @@ var SwapWidget = (() => {
       }
     }
     async loadInitialData() {
-      if (this.options.onGetTokens) {
-        try {
-          const tokens = await this.options.onGetTokens();
-          if (tokens.length > 0) {
-            this.sellToken = tokens[0];
-            if (tokens.length > 1) {
-              this.buyToken = tokens[1];
-            }
-            this.allTokens = tokens;
-            this.updateTokenDisplay();
-            this.updateBalances();
-          }
-        } catch (error) {
-          console.error("Error loading tokens:", error);
-          const errorMessage = error instanceof Error ? error.message : "Failed to load tokens";
-          this.state.error = errorMessage;
-          if (this.options.onErrorEvent) {
-            this.options.onErrorEvent(errorMessage);
-          }
+      if (this.options.initialTokens && this.options.initialTokens.length > 0) {
+        const tokens = this.options.initialTokens;
+        this.sellToken = tokens[0];
+        if (tokens.length > 1) {
+          this.buyToken = tokens[1];
         }
+        this.allTokens = tokens;
+        this.updateTokenDisplay();
+        this.updateBalances();
       } else {
         try {
           const graphEndpoint = this.options.config.graphEndpoint;
