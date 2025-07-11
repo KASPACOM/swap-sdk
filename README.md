@@ -2,6 +2,13 @@
 
 A lightweight, embeddable swap widget for Kaspa DeFi that can be easily integrated into wallets and dApps.
 
+
+**Live Demo:**  
+Try the widget in your browser:  
+[https://kaspacom.github.io/swap-widget/example.html](https://kaspacom.github.io/swap-widget/example.html)
+
+
+
 ## Features
 
 - 🔄 Token swapping with Uniswap V2 protocol
@@ -10,13 +17,13 @@ A lightweight, embeddable swap widget for Kaspa DeFi that can be easily integrat
 - 🔌 Simple wallet integration
 - ⚡ Real-time price calculations
 - 🛡️ Slippage protection
-- 📊 Price impact display
+<!-- - 📊 Price impact display -->
 
-## Installation
+<!-- ## Installation
 
 ```bash
 npm install @kaspa/swap-widget
-```
+``` -->
 
 ## Quick Start
 
@@ -104,154 +111,9 @@ npm install @kaspa/swap-widget
 </html>
 ```
 
-### Advanced Usage with Custom Configuration
-
-```javascript
-import { createSwapWidget } from '@kaspa/swap-widget';
-
-const widget = await createSwapWidget({
-    containerId: 'swap-widget',
-    config: 'kasplex'
-    // For other networks, you can configure it like this: 
-    // {
-    //     rpcUrl: 'https://your-rpc-url.com',
-    //     chainId: 1,
-    //     routerAddress: '0x...',
-    //     factoryAddress: '0x...',
-    //     wethAddress: '0x...',
-    //     defaultSlippage: 0.5,
-    //     defaultDeadline: 20
-    // },
-    onSwapSuccess: (txHash) => {
-        console.log('Swap successful:', txHash);
-    },
-    onSwapError: (error) => {
-        console.error('Swap failed:', error);
-    },
-    onConnectWallet: async () => {
-        // Implement your wallet connection logic
-        return '0x1234...'; // Return user's address
-    },
-    onDisconnectWallet: () => {
-        // Handle wallet disconnection
-    },
-    onGetTokens: async () => {
-        // Return available tokens
-        return [
-            {
-                address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
-                symbol: 'WETH',
-                name: 'Wrapped Ether',
-                decimals: 18,
-                balance: 1.5
-            },
-            {
-                address: '0xA0b86a33E6441b8c4C8C8C8C8C8C8C8C8C8C8C8C',
-                symbol: 'USDC',
-                name: 'USD Coin',
-                decimals: 6,
-                balance: 1000
-            }
-        ];
-    },
-    onGetTokenBalance: async (tokenAddress) => {
-        // Return token balance for given address
-        return '1.5';
-    }
-});
-```
-
 ## API Reference
 
-### Types
-
-#### `SwapWidgetNetworkConfig`
-```typescript
-interface SwapWidgetNetworkConfig {
-    rpcUrl: string;
-    chainId: number;
-    routerAddress: string;
-    factoryAddress: string;
-    wethAddress: string;
-    theme?: 'light' | 'dark';
-    defaultSlippage?: number;
-    defaultDeadline?: number;
-}
-```
-
-#### `SwapWidgetOptions`
-```typescript
-interface SwapWidgetOptions {
-    containerId: string;
-    config: SwapWidgetNetworkConfig;
-    onSwapSuccess?: (txHash: string) => void;
-    onSwapError?: (error: string) => void;
-    onConnectWallet?: () => Promise<string>;
-    onDisconnectWallet?: () => void;
-    onGetTokens?: () => Promise<Erc20Token[]>;
-    onGetTokenBalance?: (tokenAddress: string) => Promise<string>;
-}
-```
-
-#### `Erc20Token`
-```typescript
-interface Erc20Token {
-    address: string;
-    symbol: string;
-    name: string;
-    decimals: number;
-    balance?: number;
-    rawBalance?: string;
-    logoURI?: string;
-}
-```
-
 ### Methods
-
-#### `SwapWidget.connectWallet()`
-Connect the user's wallet.
-
-```javascript
-const address = await widget.connectWallet();
-```
-
-#### `SwapWidget.disconnectWallet()`
-Disconnect the user's wallet.
-
-```javascript
-widget.disconnectWallet();
-```
-
-#### `SwapWidget.setTokens(sellToken, buyToken)`
-Set the tokens for the swap.
-
-```javascript
-widget.setTokens(sellToken, buyToken);
-```
-
-#### `SwapWidget.setAmounts(sellAmount, buyAmount)`
-Set the amounts for the swap.
-
-```javascript
-widget.setAmounts('1.5', '2500');
-```
-
-#### `SwapWidget.setSettings(settings)`
-Update swap settings.
-
-```javascript
-widget.setSettings({
-    maxSlippage: '1.0',
-    swapDeadline: 30
-});
-```
-
-#### `SwapWidget.getState()`
-Get the current swap state.
-
-```javascript
-const state = widget.getState();
-```
 
 #### `SwapWidget.destroy()`
 Clean up the widget and remove event listeners.
@@ -260,51 +122,6 @@ Clean up the widget and remove event listeners.
 widget.destroy();
 ```
 
-## Wallet Integration
-
-The swap widget is designed to be easily integrated with any wallet. Here's how to integrate it:
-
-### 1. Wallet Connection
-Implement the `onConnectWallet` callback to handle wallet connection:
-
-```javascript
-onConnectWallet: async () => {
-    // Your wallet connection logic
-    const accounts = await window.ethereum.request({
-        method: 'eth_requestAccounts'
-    });
-    return accounts[0];
-}
-```
-
-### 2. Token Management
-Implement the `onGetTokens` callback to provide available tokens:
-
-```javascript
-onGetTokens: async () => {
-    // Return your token list
-    return [
-        {
-            address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
-            symbol: 'WETH',
-            name: 'Wrapped Ether',
-            decimals: 18,
-            balance: 1.5
-        }
-    ];
-}
-```
-
-### 3. Balance Updates
-Implement the `onGetTokenBalance` callback to provide token balances:
-
-```javascript
-onGetTokenBalance: async (tokenAddress) => {
-    // Get balance for the token
-    const balance = await getTokenBalance(tokenAddress);
-    return balance.toString();
-}
-```
 
 ## Styling
 
@@ -340,17 +157,6 @@ npm install
 npm run build
 ```
 
-### Running tests
-
-```bash
-npm test
-```
-
-### Development mode
-
-```bash
-npm run dev
-```
 
 ## Contributing
 
@@ -370,7 +176,7 @@ If you have any questions or need help integrating the swap widget, please:
 
 - Open an issue on GitHub
 - Check the documentation
-- Join our community Discord
+- Join our [Telegram](https://t.me/KaspaComOfficial)
 
 ## Changelog
 
