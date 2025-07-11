@@ -111,6 +111,15 @@ npm install @kaspa/swap-widget
 </html>
 ```
 
+
+### Network Configuration
+
+The widget supports multiple networks via a configuration object or preset string.  
+You can use a built-in preset (e.g. `'kasplex-testnet'`) or provide a custom config.
+
+**Preset options and structure are defined in [`src/types/networks.ts`](src/types/networks.ts).**
+
+
 ## API Reference
 
 ### Methods
@@ -186,3 +195,5 @@ If you have any questions or need help integrating the swap widget, please:
 - Wallet integration support
 - Light/dark themes
 - Responsive design 
+
+
