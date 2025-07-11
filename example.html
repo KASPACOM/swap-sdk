@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swap Widget Demo</title>
+    <link rel="stylesheet" href="dist/styles/swap-widget.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .demo-container {
+            max-width: 800px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            margin: 0;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .control-group label {
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .control-group select,
+        .control-group button {
+            padding: 10px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .control-group select:focus,
+        .control-group button:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .control-group button:hover {
+            background: #f8f9fa;
+        }
+
+        .theme-toggle {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: none;
+        }
+
+        .theme-toggle:hover {
+            background: linear-gradient(135deg, #5a6fd8, #6a4190);
+        }
+
+        .widget-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        #swap-widget {
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .info-panel {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+
+        .info-panel h3 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        .info-panel ul {
+            margin: 0;
+            padding-left: 20px;
+            color: #666;
+        }
+
+        .info-panel li {
+            margin-bottom: 8px;
+        }
+
+        @media (max-width: 600px) {
+            .demo-container {
+                padding: 20px;
+                margin: 10px;
+            }
+
+            .controls {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .control-group {
+                width: 100%;
+                max-width: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <div class="header">
+            <h1>Swap Widget Demo</h1>
+            <p>A lightweight, embeddable swap widget for DeFi applications</p>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="network-select">Network:</label>
+                <select id="network-select">
+                    <option value="kasplex-testnet">Kasplex Testnet</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="theme-select">Theme:</label>
+                <select id="theme-select">
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>&nbsp;</label>
+                <button class="theme-toggle" onclick="switchTheme()">Switch Theme</button>
+            </div>
+
+
+        </div>
+
+        <div class="widget-container">
+            <div id="swap-widget"></div>
+        </div>
+
+        <div class="info-panel">
+            <h3>Features</h3>
+            <ul>
+                <li>🔗 Wallet connection integration</li>
+                <li>🔄 Token swapping with Uniswap V2</li>
+                <!-- <li>⚙️ Customizable slippage and deadline</li> -->
+                <li>🎨 Light and dark themes</li>
+                <!-- <li>📱 Responsive design</li> -->
+                <li>🔧 Multiple network support</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Load the widget (all dependencies are bundled) -->
+    <script src="dist/swap-widget.browser.js"></script>
+
+    <script>
+        // Real wallet connection using window.ethereum
+        let isConnected = false;
+        let connectedAddress = null;
+
+        // Basic tokens for demo
+        const startingTokens = [
+            {
+                address: '0x0000000000000000000000000000000000000000',
+                symbol: 'KAS',
+                name: 'Kaspa',
+                decimals: 18,
+                logoURI: 'https://assets.coingecko.com/coins/images/25751/thumb/kaspa.png'
+            },
+            {
+                address: '0xD33d07ccfEd8038cEd1aa393FbEf7D7dA72be20e',
+                symbol: 'USDT',
+                name: 'Tether',
+                decimals: 6,
+                logoURI: 'https://assets.coingecko.com/coins/images/25751/thumb/kaspa.png'
+            },
+        ];
+
+        // Initialize widget
+        let swapWidget;
+        async function initializeWidget() {
+            const networkSelect = document.getElementById('network-select');
+            const themeSelect = document.getElementById('theme-select');
+            const selectedNetwork = networkSelect.value;
+            const selectedTheme = themeSelect.value;
+
+            // Destroy existing widget if it exists
+            if (swapWidget) {
+                swapWidget.destroy();
+            }
+
+            // Create new widget
+            if (!window.SwapWidget) {
+                console.error('SwapWidget not found. Make sure the browser bundle is loaded correctly.');
+                return;
+            }
+
+            // Get wallet provider (MetaMask in this example)
+            // const walletProvider = window.kasware.ethereum;
+            
+            swapWidget = await window.SwapWidget.createSwapWidget({
+                containerId: 'swap-widget',
+                theme: selectedTheme,
+                config: 'kasplex-testnet',
+                // walletProvider: walletProvider, // Pass the wallet provider
+                onConnectWallet: function(walletAddress) {
+                    console.log('Wallet connected:', walletAddress);
+                },
+                onDisconnectWallet: () => console.log('wallet disconnected'),
+                onGetTokens: async () => {
+                    console.log('Getting tokens');
+                    return startingTokens;
+                },
+                onSwapSuccess: async (hash) => {
+                    console.log('Swap sucess:', hash);
+                    alert('Swap sucess:' + hash)
+                },
+                onErrorEvent: async (error) => {
+                    alert('Error: ' + (error?.message || error));
+                }
+            });
+            
+        }
+
+        // Theme switching function
+        function switchTheme() {
+            const themeSelect = document.getElementById('theme-select');
+            const currentTheme = themeSelect.value;
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            themeSelect.value = newTheme;
+            
+            // Update body class for global theme
+            document.body.classList.toggle('dark-theme', newTheme === 'dark');
+            
+            // Reinitialize widget with new theme
+            initializeWidget();
+        }
+
+        // Event listeners
+        document.getElementById('network-select').addEventListener('change', initializeWidget);
+        document.getElementById('theme-select').addEventListener('change', initializeWidget);
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeWidget();
+        });
+
+        // Make switchTheme available globally
+        window.switchTheme = switchTheme;
+
+
+    </script>
+</body>
+</html> 
