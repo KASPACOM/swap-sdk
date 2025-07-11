@@ -248,10 +248,7 @@
                     console.log('Wallet connected:', walletAddress);
                 },
                 onDisconnectWallet: () => console.log('wallet disconnected'),
-                onGetTokens: async () => {
-                    console.log('Getting tokens');
-                    return startingTokens;
-                },
+                initialTokens: startingTokens,
                 onSwapSuccess: async (hash) => {
                     console.log('Swap sucess:', hash);
                     alert('Swap sucess:' + hash)
