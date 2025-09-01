@@ -1,12 +1,16 @@
-import { Contract, parseUnits, formatUnits, ZeroAddress, ethers } from 'ethers';
+import { Contract, parseUnits, formatUnits, ZeroAddress, ethers, hexlify } from 'ethers';
 import { CurrencyAmount, Token, TradeType } from '@uniswap/sdk-core';
 import { Trade, Pair, Route } from '@uniswap/v2-sdk';
 export class SwapService {
-    constructor(provider, config) {
+    constructor(provider, config, swapOptions) {
         this.config = config;
+        this.swapOptions = swapOptions;
         this.signer = null;
         this.pairs = [];
         this.resolvePairsLoaded = null;
+        this.resolvePartnerFeeLoaded = null;
+        this.partnerFee = 0;
+        this.isFeeActive = false;
         this.provider = provider;
         this.wethAddress = config.wethAddress;
         this.chainId = config.chainId;
@@ -18,6 +22,8 @@ export class SwapService {
             'function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)',
             'function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts)',
             'function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut) external pure returns (uint amountOut)',
+            'function getAmountIn(uint amountOut, uint reserveIn, uint reserveOut) internal pure returns (uint amountIn)',
+            'function getAmountsIn(address factory, uint amountOut, address[] memory path) internal view returns (uint[] memory amounts)',
             'function WETH() external pure returns (address)'
         ];
         // Factory ABI for pair operations
@@ -26,17 +32,45 @@ export class SwapService {
             'function allPairs(uint) external view returns (address pair)',
             'function allPairsLength() external view returns (uint)'
         ];
+        const proxyAbi = [
+            ...routerAbi,
+            'function partnerFee(bytes32) external view returns (address feeRecipient, uint16 feeBps)',
+            'function feeEnabled() external view returns (bool)',
+        ];
         this.routerContract = new Contract(config.routerAddress, routerAbi, provider);
         this.factoryContract = new Contract(config.factoryAddress, factoryAbi, provider);
+        if (config.proxyAddress) {
+            this.proxyContract = new Contract(config.proxyAddress, proxyAbi, provider);
+        }
         this.pairsLoadedPromise = new Promise((resolve) => {
             this.resolvePairsLoaded = resolve;
         });
+        this.partnerFeeLoadedPromise = new Promise((resolve) => {
+            this.resolvePartnerFeeLoaded = resolve;
+        });
         this.loadAllPairsFromGraph(config.graphEndpoint);
+        this.loadPartnerFee();
+    }
+    async loadPartnerFee() {
+        if (this.swapOptions.partnerKey) {
+            const [, fee] = await this.proxyContract?.partnerFee(this.swapOptions.partnerKey);
+            this.partnerFee = Number(fee) / 10000;
+            this.partnerFee = 1; // Currently taking all, when new proxy will arrive we will need to delete this
+        }
+        const isFeeActive = await this.proxyContract?.feeEnabled();
+        this.isFeeActive = isFeeActive;
+        if (this.resolvePartnerFeeLoaded) {
+            this.resolvePartnerFeeLoaded();
+            this.resolvePartnerFeeLoaded = null;
+        }
     }
     setSigner(signer) {
         this.signer = signer;
         // Connect the signer to the router contract for transaction execution
         this.routerContract = this.routerContract.connect(signer);
+        if (this.proxyContract) {
+            this.proxyContract = this.proxyContract.connect(signer);
+        }
     }
     /**
      * Rounds a number string to the specified number of decimal places
@@ -113,6 +147,9 @@ export class SwapService {
     async waitForPairsLoaded() {
         return await this.pairsLoadedPromise;
     }
+    async waitForPartnerFeeLoaded() {
+        return await this.partnerFeeLoadedPromise;
+    }
     createSDKPair(pair) {
         const { token0, token1, id, reserve0, reserve1 } = pair;
         const sdkToken0 = new Token(this.chainId, token0.id, Number(token0.decimals), token0.symbol, token0.name);
@@ -142,18 +179,20 @@ export class SwapService {
      * Returns the best path as an array of addresses, or null if no trade found.
      */
     async getBestTradePath(fromToken, toToken, amountInWei) {
+        console.log('Getting trade best path');
         // Create Uniswap SDK Token instances
         const sdkFromToken = new Token(this.chainId, fromToken.address, fromToken.decimals, fromToken.symbol, fromToken.name);
         const sdkToToken = new Token(this.chainId, toToken.address, toToken.decimals, toToken.symbol, toToken.name);
         // Create currency amount
         const currencyAmount = CurrencyAmount.fromRawAmount(sdkFromToken, amountInWei);
         await this.waitForPairsLoaded();
+        await this.waitForPartnerFeeLoaded();
         const pairs = this.getPairs();
         if (!pairs || pairs.length === 0) {
             throw new Error('Pairs not loaded yet. Please wait for initialization.');
         }
         const trades = Trade.bestTradeExactIn(pairs, currencyAmount, sdkToToken, {
-            maxHops: 4,
+            maxHops: 3,
             maxNumResults: 3,
         });
         if (trades.length > 0) {
@@ -176,9 +215,15 @@ export class SwapService {
             }
             // Use routerContract to get expected output
             const amountsOut = await this.routerContract.getAmountsOut(sellAmountWei, bestPath);
-            const expectedOutput = amountsOut[amountsOut.length - 1];
+            let expectedOutput = amountsOut[amountsOut.length - 1];
+            if (this.partnerFee) {
+                console.log('Partner fee:', this.partnerFee);
+                console.log('Expected output:', expectedOutput);
+                expectedOutput = BigInt(Math.floor(Number(expectedOutput) * ((100 - this.partnerFee) / 100)));
+                console.log('Expected output after partner fee:', expectedOutput);
+            }
             // Convert bigint to human-readable string
-            const expectedOutputHumanReadable = formatUnits(expectedOutput.toString(), buyToken.decimals);
+            let expectedOutputHumanReadable = formatUnits(expectedOutput.toString(), buyToken.decimals);
             return {
                 amount: expectedOutputHumanReadable,
                 path: bestPath,
@@ -233,24 +278,70 @@ export class SwapService {
             // If fromToken is not native, check allowance and approve if needed
             if (fromToken.address !== ethers.ZeroAddress) {
                 const tokenContract = new Contract(fromToken.address, ['function allowance(address,address) view returns (uint256)', 'function approve(address,uint256) returns (bool)'], this.signer);
-                const allowance = await tokenContract.allowance(signerAddress, this.config.routerAddress);
+                const allowanceTo = this.config.proxyAddress || this.config.routerAddress;
+                const allowance = await tokenContract.allowance(signerAddress, allowanceTo);
                 if (allowance < amountInWei) {
                     // Approve MaxUint256 for router
-                    const approveTx = await tokenContract.approve(this.config.routerAddress, ethers.MaxUint256);
+                    const approveTx = await tokenContract.approve(allowanceTo, ethers.MaxUint256);
                     await approveTx.wait();
                 }
             }
-            if (fromToken.address === ethers.ZeroAddress) {
-                // Swap ETH for tokens
-                tx = await this.routerContract.swapExactETHForTokens(amountOutMinWei, path, signerAddress, deadlineTimestamp, { value: amountInWei });
-            }
-            else if (toToken.address === ethers.ZeroAddress) {
-                // Swap tokens for ETH
-                tx = await this.routerContract.swapExactTokensForETH(amountInWei, amountOutMinWei, path, signerAddress, deadlineTimestamp);
+            if (this.proxyContract) {
+                console.log(amountInWei, amountOutMinWei, path, deadlineTimestamp);
+                let swapData;
+                const iface = this.proxyContract.interface;
+                console.log('signer address', signerAddress);
+                const to = this.isFeeActive ? this.config.proxyAddress : signerAddress;
+                if (fromToken.address === ethers.ZeroAddress) {
+                    // ETH -> token
+                    swapData = iface.encodeFunctionData("swapExactETHForTokens", [
+                        amountOutMinWei,
+                        path,
+                        to,
+                        deadlineTimestamp
+                    ]);
+                }
+                else if (toToken.address === ethers.ZeroAddress) {
+                    // token -> ETH
+                    swapData = iface.encodeFunctionData("swapExactTokensForETH", [
+                        amountInWei,
+                        amountOutMinWei,
+                        path,
+                        to,
+                        deadlineTimestamp
+                    ]);
+                }
+                else {
+                    // token -> token
+                    swapData = iface.encodeFunctionData("swapExactTokensForTokens", [
+                        amountInWei,
+                        amountOutMinWei,
+                        path,
+                        to,
+                        deadlineTimestamp
+                    ]);
+                }
+                const finalCallData = this.concatSelectorAndParams(ethers.getBytes(swapData), [], "permit", this.swapOptions.partnerKey);
+                tx = await this.signer.sendTransaction({
+                    to: this.config.proxyAddress,
+                    from: signerAddress,
+                    data: hexlify(finalCallData),
+                    value: fromToken.address === ethers.ZeroAddress ? amountInWei : 0n
+                });
             }
             else {
-                // Swap tokens for tokens
-                tx = await this.routerContract.swapExactTokensForTokens(amountInWei, amountOutMinWei, path, signerAddress, deadlineTimestamp);
+                if (fromToken.address === ethers.ZeroAddress) {
+                    // Swap ETH for tokens
+                    tx = await this.routerContract.swapExactETHForTokens(amountOutMinWei, path, signerAddress, deadlineTimestamp, { value: amountInWei });
+                }
+                else if (toToken.address === ethers.ZeroAddress) {
+                    // Swap tokens for ETH
+                    tx = await this.routerContract.swapExactTokensForETH(amountInWei, amountOutMinWei, path, signerAddress, deadlineTimestamp);
+                }
+                else {
+                    // Swap tokens for tokens
+                    tx = await this.routerContract.swapExactTokensForTokens(amountInWei, amountOutMinWei, path, signerAddress, deadlineTimestamp);
+                }
             }
             const receipt = await tx.wait();
             return receipt.hash;
@@ -346,6 +437,47 @@ export class SwapService {
             console.error('Error fetching tokens from graph:', error);
             return [];
         }
+    }
+    /**
+     * Concatenates bytes: selector, array of bytes (each element is Uint8Array), array length (uint8, 1 byte), marker (bytes16(keccak256(markerString)))
+     * @param selectorBytes Uint8Array — function selector (usually 4 bytes)
+     * @param arrayOfBytes Uint8Array[] — array of bytes (each element is Uint8Array)
+     * @param markerString string — string from which bytes16(keccak256(...)) will be derived
+     * @returns Uint8Array — concatenated result
+     */
+    concatSelectorAndParams(selectorBytes, arrayOfBytes, markerString, partnerKey) {
+        // Flatten permits/params into single bytes
+        const paramsBytes = arrayOfBytes.length === 0
+            ? new Uint8Array(0)
+            : arrayOfBytes.reduce((acc, arr) => {
+                const res = new Uint8Array(acc.length + arr.length);
+                res.set(acc, 0);
+                res.set(arr, acc.length);
+                return res;
+            });
+        const arrayLengthByte = new Uint8Array([arrayOfBytes.length & 0xff]);
+        const markerHash = ethers.keccak256(ethers.toUtf8Bytes(markerString));
+        const markerBytes = ethers.getBytes(markerHash).slice(0, 16);
+        const parts = [
+            selectorBytes,
+            paramsBytes,
+            arrayLengthByte,
+            markerBytes,
+        ];
+        if (partnerKey) {
+            const partnerKeyBytes = ethers.getBytes(partnerKey); // 32 bytes
+            const partnerFlagHash = ethers.keccak256(ethers.toUtf8Bytes("is_partner_fee"));
+            const partnerFlagBytes = ethers.getBytes(partnerFlagHash).slice(0, 16); // 16 bytes
+            parts.push(partnerKeyBytes, partnerFlagBytes);
+        }
+        const totalLen = parts.reduce((sum, p) => sum + p.length, 0);
+        const out = new Uint8Array(totalLen);
+        let offset = 0;
+        for (const p of parts) {
+            out.set(p, offset);
+            offset += p.length;
+        }
+        return out;
     }
 }
 //# sourceMappingURL=swap.service.js.map

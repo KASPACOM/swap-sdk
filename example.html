@@ -206,14 +206,18 @@
                 symbol: 'KAS',
                 name: 'Kaspa',
                 decimals: 18,
-                logoURI: 'https://assets.coingecko.com/coins/images/25751/thumb/kaspa.png'
             },
             {
                 address: '0xD33d07ccfEd8038cEd1aa393FbEf7D7dA72be20e',
                 symbol: 'USDT',
                 name: 'Tether',
                 decimals: 6,
-                logoURI: 'https://assets.coingecko.com/coins/images/25751/thumb/kaspa.png'
+            },
+            {
+                address: '0x5266ae5ec8040d7f92c3ddd833e74d4cf3eaf1db',
+                symbol: 'KSCM',
+                name: 'KASPACOM TEST',
+                decimals: 18,
             },
         ];
 
@@ -255,7 +259,8 @@
                 },
                 onErrorEvent: async (error) => {
                     alert('Error: ' + (error?.message || error));
-                }
+                },
+                partnerKey: '0x47696c6164000000000000000000000000000000000000000000000000000000',
             });
             
         }

@@ -1,6 +1,6 @@
 import { WalletService } from '../services/wallet.service';
 import { SwapService } from '../services/swap.service';
-import { parseUnits } from 'ethers';
+import { formatUnits, parseUnits } from 'ethers';
 export class SwapWidget {
     constructor(options) {
         // State management
@@ -21,6 +21,7 @@ export class SwapWidget {
         this.buyToken = null;
         this.sellAmount = '0';
         this.buyAmount = '0';
+        this.minAmountOut = '0';
         this.swapAction = 'sell';
         this.settings = {
             maxSlippage: '0.5',
@@ -71,7 +72,7 @@ export class SwapWidget {
                 options.onDisconnectWallet(...args);
             }
         }, options.walletProvider);
-        this.swapService = new SwapService(this.walletService.getProvider(), options.config);
+        this.swapService = new SwapService(this.walletService.getProvider(), options.config, this.options);
         this.initializeWidget();
     }
     async initializeWidget() {
@@ -124,6 +125,12 @@ export class SwapWidget {
             </div>
             <div class="balance-info">
               Balance: <span id="buy-balance">0.0</span>
+            </div>
+            <div class="min-amount-info">
+              Minimum Amount: <span id="min-amount">${this.minAmountOut}</span>
+            </div>
+            <div class="slippage-info">
+              Slippage: <span id="slippage">${this.settings.maxSlippage}</span>%
             </div>
           </div>
         </div>
@@ -246,7 +253,7 @@ export class SwapWidget {
                 const expectedOutput = await this.swapService.calculateExpectedOutput(this.sellToken, this.buyToken, this.sellAmount);
                 // Update trade path
                 this.tradePath = expectedOutput.path;
-                this.buyAmount = expectedOutput.amount;
+                this.setAmounts(this.sellAmount, expectedOutput.amount);
                 this.state.error = null;
                 this.updateAmountDisplay();
             }
@@ -330,8 +337,11 @@ export class SwapWidget {
         }
         return tokens.map(token => `
       <div class="token-modal-item" data-address="${token.address}">
-        <span class="token-modal-symbol">${token.symbol}</span>
-        <span class="token-modal-name">${token.name}</span>
+        <div class="token-modal-token-info">
+          <span class="token-modal-symbol">${token.symbol}</span>
+          <span class="token-modal-name">${token.name}</span>
+        </div>
+      <div class="token-modal-address">${token.address}</div>
       </div>
     `).join('');
     }
@@ -388,7 +398,7 @@ export class SwapWidget {
         this.sellToken = this.buyToken;
         this.buyToken = tempToken;
         this.sellAmount = this.buyAmount;
-        this.buyAmount = tempAmount;
+        this.buyAmount = '0';
         // Update trade path
         if (this.sellToken && this.buyToken) {
             this.tradePath = [this.sellToken.address, this.buyToken.address];
@@ -401,6 +411,14 @@ export class SwapWidget {
             this.onSellAmountChange();
         }
     }
+    calculateMinAmountOut() {
+        if (!this.buyToken) {
+            return 0n;
+        }
+        const slippageFactor = 10000 - Math.floor(parseFloat(this.settings.maxSlippage) * 100);
+        const amountOutBigInt = BigInt(parseUnits(this.buyAmount, this.buyToken.decimals).toString());
+        return (amountOutBigInt * BigInt(slippageFactor)) / BigInt(10000);
+    }
     async onSwapClick() {
         if (!this.canSwap()) {
             return;
@@ -409,18 +427,16 @@ export class SwapWidget {
             this.state.isSwapping = true;
             this.updateButtons();
             if (this.sellToken && this.buyToken) {
-                // Get fresh quote right before swap to ensure accurate amounts
-                const slippageFactor = 10000 - Math.floor(parseFloat(this.settings.maxSlippage) * 100);
                 const amountOutBigInt = BigInt(parseUnits(this.buyAmount, this.buyToken.decimals).toString());
-                const amountOutMin = (amountOutBigInt * BigInt(slippageFactor)) / BigInt(10000);
+                const amountOutMin = parseUnits(this.minAmountOut, this.buyToken.decimals);
                 console.log('Swap details:', {
-                    sellAmount: this.sellAmount,
+                    sellAmount: this.sellAmount.trim(),
                     expectedOutput: amountOutBigInt,
                     slippage: this.settings.maxSlippage + '%',
-                    amountOutMin: amountOutMin.toString(),
+                    amountOutMin: amountOutMin,
                     path: this.tradePath
                 });
-                const txHash = await this.swapService.swapTokens(this.sellToken, this.buyToken, parseUnits(this.sellAmount, this.sellToken.decimals), amountOutMin, this.tradePath, this.settings.swapDeadline, this.settings);
+                const txHash = await this.swapService.swapTokens(this.sellToken, this.buyToken, parseUnits(this.sellAmount.trim(), this.sellToken.decimals), amountOutMin, this.tradePath, this.settings.swapDeadline, this.settings);
                 this.state.transactionHash = txHash;
                 this.state.success = true;
                 if (this.options.onSwapSuccess) {
@@ -522,6 +538,10 @@ export class SwapWidget {
         }
         if (buyAmountInput) {
             buyAmountInput.value = this.buyAmount;
+        }
+        const minAmountElement = document.getElementById('min-amount');
+        if (minAmountElement) {
+            minAmountElement.textContent = this.minAmountOut;
         }
     }
     async updateBalances() {
@@ -652,6 +672,7 @@ export class SwapWidget {
     setAmounts(sellAmount, buyAmount) {
         this.sellAmount = sellAmount;
         this.buyAmount = buyAmount;
+        this.minAmountOut = formatUnits(this.calculateMinAmountOut().toString(), this.buyToken.decimals).toString();
         this.updateAmountDisplay();
     }
     setSettings(settings) {

@@ -1,21 +1,28 @@
 import { Signer, BrowserProvider, JsonRpcProvider } from 'ethers';
 import { Token, TradeType } from '@uniswap/sdk-core';
 import { Trade, Pair } from '@uniswap/v2-sdk';
-import { Erc20Token, SwapSettings } from '../types';
+import { Erc20Token, SwapSettings, SwapWidgetOptions } from '../types';
 import { SwapWidgetNetworkConfig } from '../types/networks';
 export declare class SwapService {
     private config;
+    private swapOptions;
     private provider;
     private signer;
     private routerContract;
     private factoryContract;
+    private proxyContract?;
     private wethAddress;
     private chainId;
     private pairs;
     private pairsLoadedPromise;
     private resolvePairsLoaded;
+    private partnerFeeLoadedPromise;
+    private resolvePartnerFeeLoaded;
+    private partnerFee;
+    private isFeeActive;
     private wethToken;
-    constructor(provider: BrowserProvider | JsonRpcProvider, config: SwapWidgetNetworkConfig);
+    constructor(provider: BrowserProvider | JsonRpcProvider, config: SwapWidgetNetworkConfig, swapOptions: SwapWidgetOptions);
+    private loadPartnerFee;
     setSigner(signer: Signer): void;
     /**
      * Rounds a number string to the specified number of decimal places
@@ -28,6 +35,7 @@ export declare class SwapService {
      */
     loadAllPairsFromGraph(graphEndpoint: string): Promise<void>;
     waitForPairsLoaded(): Promise<void>;
+    waitForPartnerFeeLoaded(): Promise<void>;
     createSDKPair(pair: {
         id: string;
         token0: {
@@ -72,5 +80,13 @@ export declare class SwapService {
      * @param search Optional search string for symbol or name
      */
     getTokensFromGraph(graphEndpoint: string, search?: string): Promise<Erc20Token[]>;
+    /**
+     * Concatenates bytes: selector, array of bytes (each element is Uint8Array), array length (uint8, 1 byte), marker (bytes16(keccak256(markerString)))
+     * @param selectorBytes Uint8Array — function selector (usually 4 bytes)
+     * @param arrayOfBytes Uint8Array[] — array of bytes (each element is Uint8Array)
+     * @param markerString string — string from which bytes16(keccak256(...)) will be derived
+     * @returns Uint8Array — concatenated result
+     */
+    private concatSelectorAndParams;
 }
 //# sourceMappingURL=swap.service.d.ts.map

@@ -4,6 +4,7 @@ export interface SwapWidgetNetworkConfig {
     rpcUrl: string;
     routerAddress: string;
     factoryAddress: string;
+    proxyAddress?: string;
     wethAddress: string;
     graphEndpoint: string;
     theme?: 'light' | 'dark';

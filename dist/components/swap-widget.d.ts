@@ -9,6 +9,7 @@ export declare class SwapWidget {
     private buyToken;
     private sellAmount;
     private buyAmount;
+    private minAmountOut;
     private swapAction;
     private settings;
     private sellSection;
@@ -39,6 +40,7 @@ export declare class SwapWidget {
     private onTokenSelected;
     private closeTokenModal;
     private onSwitchTokens;
+    private calculateMinAmountOut;
     private onSwapClick;
     private onConnectWalletClick;
     private canSwap;

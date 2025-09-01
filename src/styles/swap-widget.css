@@ -153,7 +153,7 @@
 
 
 
-.balance-info {
+.balance-info, .min-amount-info, .slippage-info {
   font-size: 12px;
   color: var(--swap-text-secondary);
 }
@@ -197,15 +197,18 @@
 /* Swap Button */
 .swap-button {
   width: 100%;
-  background: var(--swap-primary);
   color: white;
   border: none;
   border-radius: 12px;
   padding: 16px;
   font-size: 16px;
   font-weight: 600;
-  cursor: pointer;
   transition: all 0.2s ease;
+}
+
+.swap-button:not(.disabled) {
+  cursor: pointer;
+  background: var(--swap-primary);
 }
 
 .swap-button:hover:not(.disabled) {
@@ -396,19 +399,23 @@
 }
 
 .token-modal-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  background: var(--swap-secondary, #f3f4f6);
+  transition: background 0.2s;
+  cursor: pointer;
   padding: 10px 12px;
   border-radius: 8px;
-  background: var(--swap-secondary, #f3f4f6);
-  cursor: pointer;
-  transition: background 0.2s;
-  font-size: 16px;
 }
+
 .token-modal-item:hover {
   background: var(--swap-primary, #3b82f6);
   color: #fff;
+}
+
+.token-modal-token-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 16px;
 }
 .token-modal-symbol {
   font-weight: 600;
@@ -416,6 +423,10 @@
 }
 .token-modal-name {
   font-size: 14px;
+  color: var(--swap-text-secondary, #6b7280);
+}
+.token-modal-address {
+  font-size: 12px;
   color: var(--swap-text-secondary, #6b7280);
 }
 .token-modal-empty {

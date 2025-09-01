@@ -41,6 +41,7 @@ export interface SwapWidgetOptions {
     initialTokens?: Erc20Token[];
     onGetTokenBalance?: (tokenAddress: string) => Promise<string>;
     onErrorEvent?: (error: string) => void;
+    partnerKey?: string;
 }
 export type SwapActionType = 'buy' | 'sell';
 export interface Trade {

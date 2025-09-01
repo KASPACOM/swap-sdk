@@ -31331,14 +31331,14 @@ var SwapWidget = (() => {
     return new Percent(fraction.numerator, fraction.denominator);
   }
   var Percent = /* @__PURE__ */ function(_Fraction) {
-    function Percent3() {
+    function Percent2() {
       var _this;
       _this = _Fraction.apply(this, arguments) || this;
       _this.isPercent = true;
       return _this;
     }
-    _inheritsLoose(Percent3, _Fraction);
-    var _proto = Percent3.prototype;
+    _inheritsLoose(Percent2, _Fraction);
+    var _proto = Percent2.prototype;
     _proto.add = function add2(other) {
       return toPercent(_Fraction.prototype.add.call(this, other));
     };
@@ -31363,7 +31363,7 @@ var SwapWidget = (() => {
       }
       return _Fraction.prototype.multiply.call(this, ONE_HUNDRED).toFixed(decimalPlaces, format, rounding);
     };
-    return Percent3;
+    return Percent2;
   }(Fraction);
   var Price = /* @__PURE__ */ function(_Fraction) {
     function Price2() {
@@ -32376,11 +32376,15 @@ var SwapWidget = (() => {
 
   // src/services/swap.service.ts
   var SwapService = class {
-    constructor(provider, config) {
+    constructor(provider, config, swapOptions) {
       this.config = config;
+      this.swapOptions = swapOptions;
       this.signer = null;
       this.pairs = [];
       this.resolvePairsLoaded = null;
+      this.resolvePartnerFeeLoaded = null;
+      this.partnerFee = 0;
+      this.isFeeActive = false;
       this.provider = provider;
       this.wethAddress = config.wethAddress;
       this.chainId = config.chainId;
@@ -32391,6 +32395,8 @@ var SwapWidget = (() => {
         "function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)",
         "function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts)",
         "function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut) external pure returns (uint amountOut)",
+        "function getAmountIn(uint amountOut, uint reserveIn, uint reserveOut) internal pure returns (uint amountIn)",
+        "function getAmountsIn(address factory, uint amountOut, address[] memory path) internal view returns (uint[] memory amounts)",
         "function WETH() external pure returns (address)"
       ];
       const factoryAbi = [
@@ -32398,16 +32404,44 @@ var SwapWidget = (() => {
         "function allPairs(uint) external view returns (address pair)",
         "function allPairsLength() external view returns (uint)"
       ];
+      const proxyAbi = [
+        ...routerAbi,
+        "function partnerFee(bytes32) external view returns (address feeRecipient, uint16 feeBps)",
+        "function feeEnabled() external view returns (bool)"
+      ];
       this.routerContract = new Contract(config.routerAddress, routerAbi, provider);
       this.factoryContract = new Contract(config.factoryAddress, factoryAbi, provider);
+      if (config.proxyAddress) {
+        this.proxyContract = new Contract(config.proxyAddress, proxyAbi, provider);
+      }
       this.pairsLoadedPromise = new Promise((resolve) => {
         this.resolvePairsLoaded = resolve;
       });
+      this.partnerFeeLoadedPromise = new Promise((resolve) => {
+        this.resolvePartnerFeeLoaded = resolve;
+      });
       this.loadAllPairsFromGraph(config.graphEndpoint);
+      this.loadPartnerFee();
+    }
+    async loadPartnerFee() {
+      if (this.swapOptions.partnerKey) {
+        const [, fee] = await this.proxyContract?.partnerFee(this.swapOptions.partnerKey);
+        this.partnerFee = Number(fee) / 1e4;
+        this.partnerFee = 1;
+      }
+      const isFeeActive = await this.proxyContract?.feeEnabled();
+      this.isFeeActive = isFeeActive;
+      if (this.resolvePartnerFeeLoaded) {
+        this.resolvePartnerFeeLoaded();
+        this.resolvePartnerFeeLoaded = null;
+      }
     }
     setSigner(signer) {
       this.signer = signer;
       this.routerContract = this.routerContract.connect(signer);
+      if (this.proxyContract) {
+        this.proxyContract = this.proxyContract.connect(signer);
+      }
     }
     /**
      * Rounds a number string to the specified number of decimal places
@@ -32481,6 +32515,9 @@ var SwapWidget = (() => {
     async waitForPairsLoaded() {
       return await this.pairsLoadedPromise;
     }
+    async waitForPartnerFeeLoaded() {
+      return await this.partnerFeeLoadedPromise;
+    }
     createSDKPair(pair) {
       const { token0, token1, id: id2, reserve0, reserve1 } = pair;
       const sdkToken0 = new Token(
@@ -32527,6 +32564,7 @@ var SwapWidget = (() => {
      * Returns the best path as an array of addresses, or null if no trade found.
      */
     async getBestTradePath(fromToken, toToken, amountInWei) {
+      console.log("Getting trade best path");
       const sdkFromToken = new Token(
         this.chainId,
         fromToken.address,
@@ -32546,6 +32584,7 @@ var SwapWidget = (() => {
         amountInWei
       );
       await this.waitForPairsLoaded();
+      await this.waitForPartnerFeeLoaded();
       const pairs = this.getPairs();
       if (!pairs || pairs.length === 0) {
         throw new Error("Pairs not loaded yet. Please wait for initialization.");
@@ -32555,7 +32594,7 @@ var SwapWidget = (() => {
         currencyAmount,
         sdkToToken,
         {
-          maxHops: 4,
+          maxHops: 3,
           maxNumResults: 3
         }
       );
@@ -32582,8 +32621,14 @@ var SwapWidget = (() => {
           throw new Error("No trade path found for the given tokens and amount.");
         }
         const amountsOut = await this.routerContract.getAmountsOut(sellAmountWei, bestPath);
-        const expectedOutput = amountsOut[amountsOut.length - 1];
-        const expectedOutputHumanReadable = formatUnits(
+        let expectedOutput = amountsOut[amountsOut.length - 1];
+        if (this.partnerFee) {
+          console.log("Partner fee:", this.partnerFee);
+          console.log("Expected output:", expectedOutput);
+          expectedOutput = BigInt(Math.floor(Number(expectedOutput) * ((100 - this.partnerFee) / 100)));
+          console.log("Expected output after partner fee:", expectedOutput);
+        }
+        let expectedOutputHumanReadable = formatUnits(
           expectedOutput.toString(),
           buyToken.decimals
         );
@@ -32648,36 +32693,76 @@ var SwapWidget = (() => {
             ["function allowance(address,address) view returns (uint256)", "function approve(address,uint256) returns (bool)"],
             this.signer
           );
-          const allowance = await tokenContract.allowance(signerAddress, this.config.routerAddress);
+          const allowanceTo = this.config.proxyAddress || this.config.routerAddress;
+          const allowance = await tokenContract.allowance(signerAddress, allowanceTo);
           if (allowance < amountInWei) {
-            const approveTx = await tokenContract.approve(this.config.routerAddress, ethers_exports.MaxUint256);
+            const approveTx = await tokenContract.approve(allowanceTo, ethers_exports.MaxUint256);
             await approveTx.wait();
           }
         }
-        if (fromToken.address === ethers_exports.ZeroAddress) {
-          tx = await this.routerContract.swapExactETHForTokens(
-            amountOutMinWei,
-            path,
-            signerAddress,
-            deadlineTimestamp,
-            { value: amountInWei }
-          );
-        } else if (toToken.address === ethers_exports.ZeroAddress) {
-          tx = await this.routerContract.swapExactTokensForETH(
-            amountInWei,
-            amountOutMinWei,
-            path,
-            signerAddress,
-            deadlineTimestamp
-          );
+        if (this.proxyContract) {
+          console.log(amountInWei, amountOutMinWei, path, deadlineTimestamp);
+          let swapData;
+          const iface = this.proxyContract.interface;
+          console.log("signer address", signerAddress);
+          const to = this.isFeeActive ? this.config.proxyAddress : signerAddress;
+          if (fromToken.address === ethers_exports.ZeroAddress) {
+            swapData = iface.encodeFunctionData("swapExactETHForTokens", [
+              amountOutMinWei,
+              path,
+              to,
+              deadlineTimestamp
+            ]);
+          } else if (toToken.address === ethers_exports.ZeroAddress) {
+            swapData = iface.encodeFunctionData("swapExactTokensForETH", [
+              amountInWei,
+              amountOutMinWei,
+              path,
+              to,
+              deadlineTimestamp
+            ]);
+          } else {
+            swapData = iface.encodeFunctionData("swapExactTokensForTokens", [
+              amountInWei,
+              amountOutMinWei,
+              path,
+              to,
+              deadlineTimestamp
+            ]);
+          }
+          const finalCallData = this.concatSelectorAndParams(ethers_exports.getBytes(swapData), [], "permit", this.swapOptions.partnerKey);
+          tx = await this.signer.sendTransaction({
+            to: this.config.proxyAddress,
+            from: signerAddress,
+            data: hexlify(finalCallData),
+            value: fromToken.address === ethers_exports.ZeroAddress ? amountInWei : 0n
+          });
         } else {
-          tx = await this.routerContract.swapExactTokensForTokens(
-            amountInWei,
-            amountOutMinWei,
-            path,
-            signerAddress,
-            deadlineTimestamp
-          );
+          if (fromToken.address === ethers_exports.ZeroAddress) {
+            tx = await this.routerContract.swapExactETHForTokens(
+              amountOutMinWei,
+              path,
+              signerAddress,
+              deadlineTimestamp,
+              { value: amountInWei }
+            );
+          } else if (toToken.address === ethers_exports.ZeroAddress) {
+            tx = await this.routerContract.swapExactTokensForETH(
+              amountInWei,
+              amountOutMinWei,
+              path,
+              signerAddress,
+              deadlineTimestamp
+            );
+          } else {
+            tx = await this.routerContract.swapExactTokensForTokens(
+              amountInWei,
+              amountOutMinWei,
+              path,
+              signerAddress,
+              deadlineTimestamp
+            );
+          }
         }
         const receipt = await tx.wait();
         return receipt.hash;
@@ -32785,6 +32870,44 @@ var SwapWidget = (() => {
         return [];
       }
     }
+    /**
+     * Concatenates bytes: selector, array of bytes (each element is Uint8Array), array length (uint8, 1 byte), marker (bytes16(keccak256(markerString)))
+     * @param selectorBytes Uint8Array — function selector (usually 4 bytes)
+     * @param arrayOfBytes Uint8Array[] — array of bytes (each element is Uint8Array)
+     * @param markerString string — string from which bytes16(keccak256(...)) will be derived
+     * @returns Uint8Array — concatenated result
+     */
+    concatSelectorAndParams(selectorBytes, arrayOfBytes, markerString, partnerKey) {
+      const paramsBytes = arrayOfBytes.length === 0 ? new Uint8Array(0) : arrayOfBytes.reduce((acc, arr) => {
+        const res = new Uint8Array(acc.length + arr.length);
+        res.set(acc, 0);
+        res.set(arr, acc.length);
+        return res;
+      });
+      const arrayLengthByte = new Uint8Array([arrayOfBytes.length & 255]);
+      const markerHash = ethers_exports.keccak256(ethers_exports.toUtf8Bytes(markerString));
+      const markerBytes = ethers_exports.getBytes(markerHash).slice(0, 16);
+      const parts = [
+        selectorBytes,
+        paramsBytes,
+        arrayLengthByte,
+        markerBytes
+      ];
+      if (partnerKey) {
+        const partnerKeyBytes = ethers_exports.getBytes(partnerKey);
+        const partnerFlagHash = ethers_exports.keccak256(ethers_exports.toUtf8Bytes("is_partner_fee"));
+        const partnerFlagBytes = ethers_exports.getBytes(partnerFlagHash).slice(0, 16);
+        parts.push(partnerKeyBytes, partnerFlagBytes);
+      }
+      const totalLen = parts.reduce((sum, p) => sum + p.length, 0);
+      const out = new Uint8Array(totalLen);
+      let offset = 0;
+      for (const p of parts) {
+        out.set(p, offset);
+        offset += p.length;
+      }
+      return out;
+    }
   };
 
   // src/components/swap-widget.ts
@@ -32808,6 +32931,7 @@ var SwapWidget = (() => {
       this.buyToken = null;
       this.sellAmount = "0";
       this.buyAmount = "0";
+      this.minAmountOut = "0";
       this.swapAction = "sell";
       this.settings = {
         maxSlippage: "0.5",
@@ -32862,7 +32986,8 @@ var SwapWidget = (() => {
       );
       this.swapService = new SwapService(
         this.walletService.getProvider(),
-        options.config
+        options.config,
+        this.options
       );
       this.initializeWidget();
     }
@@ -32915,6 +33040,12 @@ var SwapWidget = (() => {
             </div>
             <div class="balance-info">
               Balance: <span id="buy-balance">0.0</span>
+            </div>
+            <div class="min-amount-info">
+              Minimum Amount: <span id="min-amount">${this.minAmountOut}</span>
+            </div>
+            <div class="slippage-info">
+              Slippage: <span id="slippage">${this.settings.maxSlippage}</span>%
             </div>
           </div>
         </div>
@@ -33023,7 +33154,7 @@ var SwapWidget = (() => {
             this.sellAmount
           );
           this.tradePath = expectedOutput.path;
-          this.buyAmount = expectedOutput.amount;
+          this.setAmounts(this.sellAmount, expectedOutput.amount);
           this.state.error = null;
           this.updateAmountDisplay();
         } catch (error) {
@@ -33099,8 +33230,11 @@ var SwapWidget = (() => {
       }
       return tokens.map((token) => `
       <div class="token-modal-item" data-address="${token.address}">
-        <span class="token-modal-symbol">${token.symbol}</span>
-        <span class="token-modal-name">${token.name}</span>
+        <div class="token-modal-token-info">
+          <span class="token-modal-symbol">${token.symbol}</span>
+          <span class="token-modal-name">${token.name}</span>
+        </div>
+      <div class="token-modal-address">${token.address}</div>
       </div>
     `).join("");
     }
@@ -33154,7 +33288,7 @@ var SwapWidget = (() => {
       this.sellToken = this.buyToken;
       this.buyToken = tempToken;
       this.sellAmount = this.buyAmount;
-      this.buyAmount = tempAmount;
+      this.buyAmount = "0";
       if (this.sellToken && this.buyToken) {
         this.tradePath = [this.sellToken.address, this.buyToken.address];
       }
@@ -33165,6 +33299,19 @@ var SwapWidget = (() => {
         this.onSellAmountChange();
       }
     }
+    calculateMinAmountOut() {
+      if (!this.buyToken) {
+        return 0n;
+      }
+      const slippageFactor = 1e4 - Math.floor(parseFloat(this.settings.maxSlippage) * 100);
+      const amountOutBigInt = BigInt(
+        parseUnits(
+          this.buyAmount,
+          this.buyToken.decimals
+        ).toString()
+      );
+      return amountOutBigInt * BigInt(slippageFactor) / BigInt(1e4);
+    }
     async onSwapClick() {
       if (!this.canSwap()) {
         return;
@@ -33173,25 +33320,24 @@ var SwapWidget = (() => {
         this.state.isSwapping = true;
         this.updateButtons();
         if (this.sellToken && this.buyToken) {
-          const slippageFactor = 1e4 - Math.floor(parseFloat(this.settings.maxSlippage) * 100);
           const amountOutBigInt = BigInt(
             parseUnits(
               this.buyAmount,
               this.buyToken.decimals
             ).toString()
           );
-          const amountOutMin = amountOutBigInt * BigInt(slippageFactor) / BigInt(1e4);
+          const amountOutMin = parseUnits(this.minAmountOut, this.buyToken.decimals);
           console.log("Swap details:", {
-            sellAmount: this.sellAmount,
+            sellAmount: this.sellAmount.trim(),
             expectedOutput: amountOutBigInt,
             slippage: this.settings.maxSlippage + "%",
-            amountOutMin: amountOutMin.toString(),
+            amountOutMin,
             path: this.tradePath
           });
           const txHash = await this.swapService.swapTokens(
             this.sellToken,
             this.buyToken,
-            parseUnits(this.sellAmount, this.sellToken.decimals),
+            parseUnits(this.sellAmount.trim(), this.sellToken.decimals),
             amountOutMin,
             this.tradePath,
             this.settings.swapDeadline,
@@ -33285,6 +33431,10 @@ var SwapWidget = (() => {
       }
       if (buyAmountInput) {
         buyAmountInput.value = this.buyAmount;
+      }
+      const minAmountElement = document.getElementById("min-amount");
+      if (minAmountElement) {
+        minAmountElement.textContent = this.minAmountOut;
       }
     }
     async updateBalances() {
@@ -33396,6 +33546,7 @@ var SwapWidget = (() => {
     setAmounts(sellAmount, buyAmount) {
       this.sellAmount = sellAmount;
       this.buyAmount = buyAmount;
+      this.minAmountOut = formatUnits(this.calculateMinAmountOut().toString(), this.buyToken.decimals).toString();
       this.updateAmountDisplay();
     }
     setSettings(settings) {
@@ -33429,9 +33580,10 @@ var SwapWidget = (() => {
       rpcUrl: "https://rpc.kasplextest.xyz",
       routerAddress: "0x5A410f79f58a11344E3523d99820Cf231bc888bd",
       factoryAddress: "0x772B3321B37C1a9aeF0Da1B5A6453E1C2A264beF",
+      proxyAddress: "0xbE448f863d2bB7bCcD9185A854DF2D8d63498dB0",
       wethAddress: "0x654A3287c317D4Fc6e8482FeF523Dc4572b563AA",
       graphEndpoint: "https://dev-graph-kasplex.kaspa.com/subgraphs/name/uniswap-v2",
-      blockExplorerUrl: "https://frontend.kasplextest.xyz",
+      blockExplorerUrl: "https://explorer.testnet.kasplextest.xyz",
       defaultSlippage: 0.5,
       defaultDeadline: 20,
       additionalJsonRpcApiProviderOptionsOptions: {
