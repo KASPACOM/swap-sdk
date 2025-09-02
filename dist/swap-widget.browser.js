@@ -32591,6 +32591,12 @@ var SwapWidget = (() => {
         return null;
       }
     }
+    trimTrailingZeros(value) {
+      if (!value.includes("."))
+        return value;
+      value = value.replace(/\.?0+$/, "");
+      return value;
+    }
     /**
      * 
      * @param sellToken 
@@ -32602,7 +32608,7 @@ var SwapWidget = (() => {
      */
     async calculateTrade(sellToken, buyToken, targetAmount, isOutputAmount, slippage) {
       try {
-        const roundedAmountIn = this.roundToDecimals(targetAmount, sellToken.decimals);
+        const roundedAmountIn = this.roundToDecimals(targetAmount, isOutputAmount ? buyToken.decimals : sellToken.decimals);
         let sellAmountWei = parseUnits(
           roundedAmountIn,
           isOutputAmount ? buyToken.decimals : sellToken.decimals
@@ -32625,7 +32631,7 @@ var SwapWidget = (() => {
         const amountOut = trade.outputAmount.quotient.toString();
         let amounts = {
           amountIn: formatUnits(amountIn, sellToken.decimals),
-          amountOut: isOutputAmount ? targetAmount : formatUnits(amountOut, buyToken.decimals),
+          amountOut: isOutputAmount ? this.trimTrailingZeros(roundedAmountIn) : formatUnits(amountOut, buyToken.decimals),
           amountInRaw: amountIn,
           amountOutRaw: amountOut
         };

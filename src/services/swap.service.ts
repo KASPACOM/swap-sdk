@@ -338,6 +338,15 @@ export class SwapService {
     }
   }
 
+  private trimTrailingZeros(value: string): string {
+    if (!value.includes('.')) return value; // no decimals
+  
+    // Remove trailing zeros after decimal
+    value = value.replace(/\.?0+$/, '');
+  
+    return value;
+  }
+
 
   /**
    * 
@@ -361,7 +370,7 @@ export class SwapService {
     try {
 
       // Round the input amount to avoid parseUnits errors
-      const roundedAmountIn = this.roundToDecimals(targetAmount, sellToken.decimals);
+      const roundedAmountIn = this.roundToDecimals(targetAmount, isOutputAmount ? buyToken.decimals : sellToken.decimals);
 
       let sellAmountWei = parseUnits(
         roundedAmountIn,
@@ -395,7 +404,7 @@ export class SwapService {
 
       let amounts: ComputedAmounts = {
         amountIn: formatUnits(amountIn, sellToken.decimals),
-        amountOut: isOutputAmount ? targetAmount : formatUnits(amountOut, buyToken.decimals),
+        amountOut: isOutputAmount ? this.trimTrailingZeros(roundedAmountIn) : formatUnits(amountOut, buyToken.decimals),
         amountInRaw: amountIn,
         amountOutRaw: amountOut,
       };
