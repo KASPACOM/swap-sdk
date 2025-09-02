@@ -6537,12 +6537,20 @@ var SwapWidget = (() => {
   // src/index.ts
   var src_exports = {};
   __export(src_exports, {
+    LoaderStatuses: () => LoaderStatuses,
     SwapService: () => SwapService,
-    SwapWidget: () => SwapWidget,
+    SwapWidgetController: () => SwapWidgetController,
     WalletService: () => WalletService,
-    createSwapWidget: () => createSwapWidget,
-    initSwapWidget: () => initSwapWidget
+    createKaspaComSwapController: () => createKaspaComSwapController
   });
+
+  // src/types/index.ts
+  var LoaderStatuses = /* @__PURE__ */ ((LoaderStatuses2) => {
+    LoaderStatuses2[LoaderStatuses2["CALCULATING_QUOTE"] = 1] = "CALCULATING_QUOTE";
+    LoaderStatuses2[LoaderStatuses2["APPROVING"] = 2] = "APPROVING";
+    LoaderStatuses2[LoaderStatuses2["SWAPPING"] = 3] = "SWAPPING";
+    return LoaderStatuses2;
+  })(LoaderStatuses || {});
 
   // node_modules/ethers/lib.esm/ethers.js
   var ethers_exports = {};
@@ -29621,7 +29629,7 @@ var SwapWidget = (() => {
 
   // src/services/wallet.service.ts
   var WalletService = class {
-    constructor(config, onConnectWallet, onDisconnectWallet, walletProvider) {
+    constructor(config, walletProvider) {
       this.walletProvider = null;
       // ethers.js BrowserProvider for wallet
       this.signer = null;
@@ -29634,38 +29642,9 @@ var SwapWidget = (() => {
         name: config.name,
         chainId: config.chainId
       }, config.additionalJsonRpcApiProviderOptionsOptions);
-      this.onConnectWalletCallback = onConnectWallet;
-      this.onDisconnectWalletCallback = onDisconnectWallet;
       this.customWalletProvider = walletProvider;
       if (this.customWalletProvider) {
         this.connect();
-      }
-    }
-    setupEthereumListeners() {
-      if (typeof window !== "undefined" && window.ethereum) {
-        this.ethereumWalletProvider = window.ethereum;
-        if (!this.ethereumWalletProvider) {
-          return;
-        }
-        this.ethereumWalletProvider.on("accountsChanged", (accounts) => {
-          if (accounts.length === 0) {
-            this.disconnect();
-          } else {
-            this.address = accounts[0];
-            this.updateWalletProvider();
-          }
-        });
-        this.ethereumWalletProvider.on("chainChanged", (chainId) => {
-          const newChainId = parseInt(chainId, 16);
-          if (newChainId !== this.config.chainId) {
-            this.disconnect();
-          } else {
-            this.updateWalletProvider();
-          }
-        });
-        this.ethereumWalletProvider.on("disconnect", () => {
-          this.disconnect();
-        });
       }
     }
     async updateWalletProvider() {
@@ -29679,15 +29658,11 @@ var SwapWidget = (() => {
       }
     }
     async connect() {
-      const provider = this.customWalletProvider || typeof window !== "undefined" && window.ethereum;
-      if (!provider) {
-        this.setupEthereumListeners();
-      }
-      const effectiveProvider = this.customWalletProvider || typeof window !== "undefined" && window.ethereum;
-      if (!effectiveProvider) {
+      const etheriumProvider = this.customWalletProvider;
+      if (!etheriumProvider) {
         throw new Error("No Ethereum wallet detected. Please install MetaMask or another Ethereum wallet.");
       }
-      this.ethereumWalletProvider = effectiveProvider;
+      this.ethereumWalletProvider = etheriumProvider;
       try {
         const accounts = await this.ethereumWalletProvider.request({
           method: "eth_requestAccounts"
@@ -32375,6 +32350,7 @@ var SwapWidget = (() => {
   }();
 
   // src/services/swap.service.ts
+  var PARTNER_FEE_BPS_DIVISOR = 10000n;
   var SwapService = class {
     constructor(provider, config, swapOptions) {
       this.config = config;
@@ -32383,20 +32359,26 @@ var SwapWidget = (() => {
       this.pairs = [];
       this.resolvePairsLoaded = null;
       this.resolvePartnerFeeLoaded = null;
-      this.partnerFee = 0;
+      this.partnerFee = 0n;
       this.isFeeActive = false;
       this.provider = provider;
       this.wethAddress = config.wethAddress;
       this.chainId = config.chainId;
       const routerAbi = [
+        // Swaps (ERC20 <-> ERC20)
         "function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)",
-        "function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)",
         "function swapTokensForExactTokens(uint amountOut, uint amountInMax, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)",
+        // Swaps (ETH <-> ERC20)
+        "function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)",
+        "function swapETHForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)",
         "function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)",
+        "function swapTokensForExactETH(uint amountOut, uint amountInMax, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)",
+        // Get Amounts
         "function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts)",
         "function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut) external pure returns (uint amountOut)",
         "function getAmountIn(uint amountOut, uint reserveIn, uint reserveOut) internal pure returns (uint amountIn)",
         "function getAmountsIn(address factory, uint amountOut, address[] memory path) internal view returns (uint[] memory amounts)",
+        // Get WETH
         "function WETH() external pure returns (address)"
       ];
       const factoryAbi = [
@@ -32423,18 +32405,23 @@ var SwapWidget = (() => {
       this.loadAllPairsFromGraph(config.graphEndpoint);
       this.loadPartnerFee();
     }
+    // parnter fee is BPS_DIVISOR = 10_000n;
     async loadPartnerFee() {
+      if (!this.resolvePairsLoaded) {
+        return this.partnerFee;
+      }
       if (this.swapOptions.partnerKey) {
         const [, fee] = await this.proxyContract?.partnerFee(this.swapOptions.partnerKey);
-        this.partnerFee = Number(fee) / 1e4;
-        this.partnerFee = 1;
+        this.partnerFee = fee;
       }
+      this.partnerFee = 100n;
       const isFeeActive = await this.proxyContract?.feeEnabled();
       this.isFeeActive = isFeeActive;
       if (this.resolvePartnerFeeLoaded) {
         this.resolvePartnerFeeLoaded();
         this.resolvePartnerFeeLoaded = null;
       }
+      return this.partnerFee;
     }
     setSigner(signer) {
       this.signer = signer;
@@ -32563,8 +32550,7 @@ var SwapWidget = (() => {
      * Finds the best trade path using Uniswap SDK for a given input amount.
      * Returns the best path as an array of addresses, or null if no trade found.
      */
-    async getBestTradePath(fromToken, toToken, amountInWei) {
-      console.log("Getting trade best path");
+    async getBestTrade(fromToken, toToken, amountInWei, isOutputAmount) {
       const sdkFromToken = new Token(
         this.chainId,
         fromToken.address,
@@ -32580,7 +32566,7 @@ var SwapWidget = (() => {
         toToken.name
       );
       const currencyAmount = CurrencyAmount.fromRawAmount(
-        sdkFromToken,
+        isOutputAmount ? sdkToToken : sdkFromToken,
         amountInWei
       );
       await this.waitForPairsLoaded();
@@ -32589,52 +32575,88 @@ var SwapWidget = (() => {
       if (!pairs || pairs.length === 0) {
         throw new Error("Pairs not loaded yet. Please wait for initialization.");
       }
-      const trades = Trade.bestTradeExactIn(
+      const tradeConfig = {
+        maxHops: 3,
+        maxNumResults: 1
+      };
+      const trades = isOutputAmount ? Trade.bestTradeExactOut(pairs, sdkFromToken, currencyAmount, tradeConfig) : Trade.bestTradeExactIn(
         pairs,
         currencyAmount,
         sdkToToken,
-        {
-          maxHops: 3,
-          maxNumResults: 3
-        }
+        tradeConfig
       );
       if (trades.length > 0) {
-        const bestTrade = trades[0];
-        return bestTrade.route.path.map((token) => token.address);
+        return trades[0];
       } else {
         return null;
       }
     }
-    async calculateExpectedOutput(sellToken, buyToken, amountIn) {
+    /**
+     * 
+     * @param sellToken 
+     * @param buyToken 
+     * @param targetAmount 
+     * @param isOutputAmount true if user input output (How much tokens to receive) and not input (how much tokens to sell)
+     * @param slippage 
+     * @returns 
+     */
+    async calculateTrade(sellToken, buyToken, targetAmount, isOutputAmount, slippage) {
       try {
-        const roundedAmountIn = this.roundToDecimals(amountIn, sellToken.decimals);
-        const sellAmountWei = parseUnits(
+        const roundedAmountIn = this.roundToDecimals(targetAmount, sellToken.decimals);
+        let sellAmountWei = parseUnits(
           roundedAmountIn,
-          sellToken.decimals
+          isOutputAmount ? buyToken.decimals : sellToken.decimals
         );
-        const bestPath = await this.getBestTradePath(
+        if (isOutputAmount && this.partnerFee && this.partnerFee > 0n) {
+          const numerator = sellAmountWei * PARTNER_FEE_BPS_DIVISOR;
+          const denominator = PARTNER_FEE_BPS_DIVISOR - this.partnerFee;
+          sellAmountWei = (numerator + denominator - 1n) / denominator;
+        }
+        const trade = await this.getBestTrade(
           sellToken.address == ethers_exports.ZeroAddress ? this.wethToken : sellToken,
           buyToken.address == ethers_exports.ZeroAddress ? this.wethToken : buyToken,
-          sellAmountWei.toString()
+          sellAmountWei.toString(),
+          isOutputAmount
         );
-        if (!bestPath) {
+        if (!trade) {
           throw new Error("No trade path found for the given tokens and amount.");
         }
-        const amountsOut = await this.routerContract.getAmountsOut(sellAmountWei, bestPath);
-        let expectedOutput = amountsOut[amountsOut.length - 1];
-        if (this.partnerFee) {
-          console.log("Partner fee:", this.partnerFee);
-          console.log("Expected output:", expectedOutput);
-          expectedOutput = BigInt(Math.floor(Number(expectedOutput) * ((100 - this.partnerFee) / 100)));
-          console.log("Expected output after partner fee:", expectedOutput);
+        const amountIn = trade.inputAmount.quotient.toString();
+        const amountOut = trade.outputAmount.quotient.toString();
+        let amounts = {
+          amountIn: formatUnits(amountIn, sellToken.decimals),
+          amountOut: isOutputAmount ? targetAmount : formatUnits(amountOut, buyToken.decimals),
+          amountInRaw: amountIn,
+          amountOutRaw: amountOut
+        };
+        const slippagePercent = new Percent(Math.round(parseFloat(slippage) * 100), 1e4);
+        let maxAmountIn, minAmountOut;
+        if (isOutputAmount) {
+          maxAmountIn = trade.maximumAmountIn(slippagePercent).quotient.toString();
+          amounts.maxAmountInRaw = maxAmountIn;
+          amounts.maxAmountIn = formatUnits(maxAmountIn, sellToken.decimals);
+        } else {
+          minAmountOut = trade.minimumAmountOut(slippagePercent).quotient.toString();
+          amounts.minAmountOutRaw = minAmountOut;
+          amounts.minAmountOut = formatUnits(minAmountOut, buyToken.decimals);
         }
-        let expectedOutputHumanReadable = formatUnits(
-          expectedOutput.toString(),
-          buyToken.decimals
-        );
+        if (this.partnerFee && this.partnerFee > 0n) {
+          if (!isOutputAmount) {
+            const amountOut2 = BigInt(trade.outputAmount.quotient.toString());
+            const amountOutMinusFee = amountOut2 * (PARTNER_FEE_BPS_DIVISOR - this.partnerFee) / PARTNER_FEE_BPS_DIVISOR;
+            amounts.amountOutRaw = amountOutMinusFee.toString();
+            amounts.amountOut = formatUnits(amountOutMinusFee, buyToken.decimals);
+            if (minAmountOut) {
+              const minOut = BigInt(minAmountOut.toString());
+              const minOutMinusFee = minOut * (PARTNER_FEE_BPS_DIVISOR - this.partnerFee) / PARTNER_FEE_BPS_DIVISOR;
+              amounts.minAmountOutRaw = minOutMinusFee.toString();
+              amounts.minAmountOut = formatUnits(minOutMinusFee, buyToken.decimals);
+            }
+          }
+        }
         return {
-          amount: expectedOutputHumanReadable,
-          path: bestPath
+          trade,
+          computed: amounts
         };
       } catch (error) {
         console.error("Error calculating expected output:", error);
@@ -32660,26 +32682,26 @@ var SwapWidget = (() => {
         return false;
       }
     }
-    async approveToken(tokenAddress, spenderAddress, amount) {
+    async approveIfNeedApproval(fromToken, amountInWei) {
       if (!this.signer) {
         throw new Error("Signer not set");
       }
-      try {
+      if (fromToken.address !== ethers_exports.ZeroAddress) {
         const tokenContract = new Contract(
-          tokenAddress,
-          ["function approve(address,uint256) returns (bool)"],
+          fromToken.address,
+          ["function allowance(address,address) view returns (uint256)", "function approve(address,uint256) returns (bool)"],
           this.signer
         );
-        const amountWei = parseUnits(amount, 18);
-        const tx = await tokenContract.approve(spenderAddress, amountWei);
-        const receipt = await tx.wait();
-        return receipt.hash;
-      } catch (error) {
-        console.error("Error approving token:", error);
-        throw error;
+        const signerAddress = await this.signer.getAddress();
+        const allowanceTo = this.config.proxyAddress || this.config.routerAddress;
+        const allowance = await tokenContract.allowance(signerAddress, allowanceTo);
+        if (allowance < amountInWei) {
+          return await tokenContract.approve(allowanceTo, ethers_exports.MaxUint256);
+        }
       }
+      return null;
     }
-    async swapTokens(fromToken, toToken, amountInWei, amountOutMinWei, path, deadline, settings) {
+    async swapTokens(fromToken, toToken, amountInWei, amountOutWei, path, isOutputAmount, deadline) {
       if (!this.signer) {
         throw new Error("Signer not set");
       }
@@ -32687,28 +32709,38 @@ var SwapWidget = (() => {
         const deadlineTimestamp = Math.floor(Date.now() / 1e3) + deadline * 60;
         let tx;
         const signerAddress = await this.signer.getAddress();
-        if (fromToken.address !== ethers_exports.ZeroAddress) {
-          const tokenContract = new Contract(
-            fromToken.address,
-            ["function allowance(address,address) view returns (uint256)", "function approve(address,uint256) returns (bool)"],
-            this.signer
-          );
-          const allowanceTo = this.config.proxyAddress || this.config.routerAddress;
-          const allowance = await tokenContract.allowance(signerAddress, allowanceTo);
-          if (allowance < amountInWei) {
-            const approveTx = await tokenContract.approve(allowanceTo, ethers_exports.MaxUint256);
-            await approveTx.wait();
+        const iface = this.proxyContract ? this.proxyContract.interface : this.routerContract.interface;
+        let swapData;
+        const to = this.isFeeActive ? this.config.proxyAddress : signerAddress;
+        if (isOutputAmount) {
+          if (fromToken.address === ethers_exports.ZeroAddress) {
+            swapData = iface.encodeFunctionData("swapETHForExactTokens", [
+              amountOutWei,
+              path,
+              to,
+              deadlineTimestamp
+            ]);
+          } else if (toToken.address === ethers_exports.ZeroAddress) {
+            swapData = iface.encodeFunctionData("swapTokensForExactETH", [
+              amountOutWei,
+              amountInWei,
+              path,
+              to,
+              deadlineTimestamp
+            ]);
+          } else {
+            swapData = iface.encodeFunctionData("swapTokensForExactTokens", [
+              amountOutWei,
+              amountInWei,
+              path,
+              to,
+              deadlineTimestamp
+            ]);
           }
-        }
-        if (this.proxyContract) {
-          console.log(amountInWei, amountOutMinWei, path, deadlineTimestamp);
-          let swapData;
-          const iface = this.proxyContract.interface;
-          console.log("signer address", signerAddress);
-          const to = this.isFeeActive ? this.config.proxyAddress : signerAddress;
+        } else {
           if (fromToken.address === ethers_exports.ZeroAddress) {
             swapData = iface.encodeFunctionData("swapExactETHForTokens", [
-              amountOutMinWei,
+              amountOutWei,
               path,
               to,
               deadlineTimestamp
@@ -32716,7 +32748,7 @@ var SwapWidget = (() => {
           } else if (toToken.address === ethers_exports.ZeroAddress) {
             swapData = iface.encodeFunctionData("swapExactTokensForETH", [
               amountInWei,
-              amountOutMinWei,
+              amountOutWei,
               path,
               to,
               deadlineTimestamp
@@ -32724,48 +32756,23 @@ var SwapWidget = (() => {
           } else {
             swapData = iface.encodeFunctionData("swapExactTokensForTokens", [
               amountInWei,
-              amountOutMinWei,
+              amountOutWei,
               path,
               to,
               deadlineTimestamp
             ]);
           }
-          const finalCallData = this.concatSelectorAndParams(ethers_exports.getBytes(swapData), [], "permit", this.swapOptions.partnerKey);
-          tx = await this.signer.sendTransaction({
-            to: this.config.proxyAddress,
-            from: signerAddress,
-            data: hexlify(finalCallData),
-            value: fromToken.address === ethers_exports.ZeroAddress ? amountInWei : 0n
-          });
-        } else {
-          if (fromToken.address === ethers_exports.ZeroAddress) {
-            tx = await this.routerContract.swapExactETHForTokens(
-              amountOutMinWei,
-              path,
-              signerAddress,
-              deadlineTimestamp,
-              { value: amountInWei }
-            );
-          } else if (toToken.address === ethers_exports.ZeroAddress) {
-            tx = await this.routerContract.swapExactTokensForETH(
-              amountInWei,
-              amountOutMinWei,
-              path,
-              signerAddress,
-              deadlineTimestamp
-            );
-          } else {
-            tx = await this.routerContract.swapExactTokensForTokens(
-              amountInWei,
-              amountOutMinWei,
-              path,
-              signerAddress,
-              deadlineTimestamp
-            );
-          }
         }
-        const receipt = await tx.wait();
-        return receipt.hash;
+        if (this.proxyContract) {
+          swapData = hexlify(this.concatSelectorAndParams(ethers_exports.getBytes(swapData), [], "permit", this.swapOptions.partnerKey));
+        }
+        tx = await this.signer.sendTransaction({
+          to: this.config.proxyAddress || this.config.routerAddress,
+          from: signerAddress,
+          data: swapData,
+          value: fromToken.address === ethers_exports.ZeroAddress ? amountInWei : 0n
+        });
+        return tx;
       } catch (error) {
         console.error("Error swapping tokens:", error);
         throw error;
@@ -32911,664 +32918,174 @@ var SwapWidget = (() => {
   };
 
   // src/components/swap-widget.ts
-  var SwapWidget = class {
+  var DEFAULT_SETTINGS = {
+    maxSlippage: "0.5",
+    swapDeadline: 20
+  };
+  var SwapWidgetController = class {
     constructor(options) {
-      // State management
       this.state = {
-        needsApproval: false,
-        isApproved: false,
-        isApproving: false,
-        isSwapping: false,
-        error: null,
-        success: false,
-        transactionHash: null,
-        status: null,
-        expectedAmountOut: null,
-        isCalculating: false
+        loader: null
       };
-      // Swap data
-      this.sellToken = null;
-      this.buyToken = null;
-      this.sellAmount = "0";
-      this.buyAmount = "0";
-      this.minAmountOut = "0";
-      this.swapAction = "sell";
-      this.settings = {
-        maxSlippage: "0.5",
-        swapDeadline: 20
+      this.input = {
+        fromToken: null,
+        toToken: null,
+        amount: void 0,
+        isOutputAmount: false,
+        settings: DEFAULT_SETTINGS
       };
-      // UI elements
-      this.sellSection = null;
-      this.buySection = null;
-      this.swapButton = null;
-      this.connectWalletButton = null;
-      this.settingsButton = null;
-      this.tokenModal = null;
-      this.tokenModalSection = null;
-      this.allTokens = [];
-      // Add this property to the class
-      this.tokenSearchDebounceTimer = null;
-      this.sellAmountDebounceTimer = null;
-      // Add a property to track currently displayed tokens
-      this.displayedTokens = [];
-      // Add tradePath property
-      this.tradePath = [];
-      // Add interval timer for periodic updates
-      this.updateInterval = null;
-      this.errorModal = null;
-      this.disconnectWalletButton = null;
       this.options = options;
-      this.container = document.getElementById(options.containerId) || document.createElement("div");
+      this.initServices();
+    }
+    initServices() {
       this.walletService = new WalletService(
-        options.config,
-        (...args) => {
-          const signer = this.walletService.getSigner();
-          if (signer) {
-            this.swapService.setSigner(signer);
-          }
-          this.render();
-          this.attachEventListeners();
-          this.updateBalances();
-          if (options?.onConnectWallet) {
-            options.onConnectWallet(...args);
-          }
-        },
-        (...args) => {
-          this.swapService.setSigner(null);
-          this.render();
-          this.attachEventListeners();
-          this.updateBalances();
-          if (options?.onDisconnectWallet) {
-            options.onDisconnectWallet(...args);
-          }
-        },
-        options.walletProvider
+        this.options.networkConfig,
+        this.options.walletProvider
       );
       this.swapService = new SwapService(
         this.walletService.getProvider(),
-        options.config,
+        this.options.networkConfig,
         this.options
       );
-      this.initializeWidget();
     }
-    async initializeWidget() {
-      this.render();
-      this.attachEventListeners();
-      await this.swapService.waitForPairsLoaded();
-      await this.loadInitialData();
-      this.startPeriodicUpdates();
-    }
-    render() {
-      this.container.innerHTML = `
-      <div class="swap-widget ${this.options.theme || "light"}">
-        <div class="swap-header">
-          <h3>Swap Tokens</h3>
-        </div>
-        ${this.state.error ? `<div class="swap-widget-error">${this.state.error}</div>` : ""}
-        <div class="swap-sections">
-          <div class="swap-section sell-section" id="sell-section">
-            <div class="section-header">
-              <span class="section-title">Sell</span>
-              <button class="token-select-button" id="sell-token-btn">
-                ${this.sellToken ? this.sellToken.symbol : "Select Token"}
-              </button>
-            </div>
-            <div class="amount-input-container">
-              <input type="text" class="amount-input" id="sell-amount" placeholder="0.0" value="${this.sellAmount}">
-            </div>
-            <div class="balance-info">
-              Balance: <span id="sell-balance">0.0</span>
-            </div>
-          </div>
-          
-          <div class="swap-arrow" id="swap-arrow">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M7 10l5 5 5-5"/>
-              <path d="M7 4l5 5 5-5"/>
-            </svg>
-          </div>
-          
-          <div class="swap-section buy-section" id="buy-section">
-            <div class="section-header">
-              <span class="section-title">Buy</span>
-              <button class="token-select-button" id="buy-token-btn">
-                ${this.buyToken ? this.buyToken.symbol : "Select Token"}
-              </button>
-            </div>
-            <div class="amount-input-container">
-              <input type="text" class="amount-input" id="buy-amount" placeholder="0.0" value="${this.buyAmount}" readonly>
-            </div>
-            <div class="balance-info">
-              Balance: <span id="buy-balance">0.0</span>
-            </div>
-            <div class="min-amount-info">
-              Minimum Amount: <span id="min-amount">${this.minAmountOut}</span>
-            </div>
-            <div class="slippage-info">
-              Slippage: <span id="slippage">${this.settings.maxSlippage}</span>%
-            </div>
-          </div>
-        </div>
-        
-        <div class="button-container">
-          ${!this.walletService.isConnected() ? `
-            <button class="connect-wallet-button" id="connect-wallet-btn">
-              Connect Wallet
-            </button>
-          ` : `
-            <button class="swap-button" id="swap-btn" ${this.canSwap() ? "" : "disabled"}>
-              ${this.getSwapButtonText()}
-            </button>
-          `}
-          ${this.walletService.isConnected() && !this.options.walletProvider ? `
-            <button class="disconnect-wallet-button" id="disconnect-wallet-btn">
-              Disconnect Wallet
-            </button>
-          ` : ""}
-        </div>
-      </div>
-    `;
-      this.sellSection = document.getElementById("sell-section");
-      this.buySection = document.getElementById("buy-section");
-      this.swapButton = document.getElementById("swap-btn");
-      this.connectWalletButton = document.getElementById("connect-wallet-btn");
-      this.disconnectWalletButton = document.getElementById("disconnect-wallet-btn");
-      this.updateButtons();
-    }
-    attachEventListeners() {
-      const sellAmountInput = document.getElementById("sell-amount");
-      sellAmountInput?.addEventListener("input", (e) => {
-        this.state.isCalculating = true;
-        this.updateButtons();
-        this.sellAmount = e.target.value;
-        if (this.sellAmountDebounceTimer)
-          clearTimeout(this.sellAmountDebounceTimer);
-        this.sellAmountDebounceTimer = setTimeout(() => {
-          this.onSellAmountChange();
-        }, 300);
-      });
-      document.getElementById("sell-token-btn")?.addEventListener("click", () => {
-        this.onTokenSelect("sell");
-      });
-      document.getElementById("buy-token-btn")?.addEventListener("click", () => {
-        this.onTokenSelect("buy");
-      });
-      document.getElementById("swap-arrow")?.addEventListener("click", () => {
-        this.onSwitchTokens();
-      });
-      this.connectWalletButton?.addEventListener("click", () => {
-        this.onConnectWalletClick();
-      });
-      this.swapButton?.addEventListener("click", () => {
-        this.onSwapClick();
-      });
-      const disconnectBtn = document.getElementById("disconnect-wallet-btn");
-      if (disconnectBtn) {
-        disconnectBtn.addEventListener("click", () => {
-          this.disconnectWallet();
-        });
+    setChange(patch) {
+      const next = {
+        ...this.state,
+        ...patch
+      };
+      this.state = next;
+      if (typeof this.options.onChange === "function") {
+        this.options.onChange(next, patch);
       }
     }
-    async loadInitialData() {
-      if (this.options.initialTokens && this.options.initialTokens.length > 0) {
-        const tokens = this.options.initialTokens;
-        this.sellToken = tokens[0];
-        if (tokens.length > 1) {
-          this.buyToken = tokens[1];
-        }
-        this.allTokens = tokens;
-        this.updateTokenDisplay();
-        this.updateBalances();
-      } else {
-        try {
-          const graphEndpoint = this.options.config.graphEndpoint;
-          const tokens = await this.swapService.getTokensFromGraph(graphEndpoint);
-          if (tokens.length > 0) {
-            this.sellToken = tokens[0];
-            if (tokens.length > 1) {
-              this.buyToken = tokens[1];
-            }
-            this.allTokens = tokens;
-            this.updateTokenDisplay();
-            this.updateBalances();
-          }
-        } catch (error) {
-          console.error("Error fetching tokens from graph:", error);
-          const errorMessage = error instanceof Error ? error.message : "Failed to fetch tokens from graph";
-          this.state.error = errorMessage;
-          if (this.options.onErrorEvent) {
-            this.options.onErrorEvent(errorMessage);
-          }
-        }
-      }
-    }
-    async onSellAmountChange() {
-      await this.swapService.waitForPairsLoaded();
-      if (this.sellToken && this.buyToken && this.sellAmount && parseFloat(this.sellAmount) > 0 && this.sellToken.address && this.buyToken.address) {
-        this.state.isCalculating = true;
-        this.updateButtons();
-        try {
-          const expectedOutput = await this.swapService.calculateExpectedOutput(
-            this.sellToken,
-            this.buyToken,
-            this.sellAmount
-          );
-          this.tradePath = expectedOutput.path;
-          this.setAmounts(this.sellAmount, expectedOutput.amount);
-          this.state.error = null;
-          this.updateAmountDisplay();
-        } catch (error) {
-          console.error("Error calculating expected output:", error);
-          this.buyAmount = "0";
-          const errorMsg = error instanceof Error ? error.message : "Unknown error";
-          this.state.error = errorMsg;
-          this.updateAmountDisplay();
-          if (this.options.onErrorEvent) {
-            this.options.onErrorEvent(errorMsg);
-          }
-        } finally {
-          this.state.isCalculating = false;
-          this.updateButtons();
-        }
-      } else {
-        this.buyAmount = "0";
-        this.state.error = null;
-        this.updateAmountDisplay();
-      }
-    }
-    onTokenSelect(section) {
-      this.tokenModalSection = section;
-      this.openTokenModal();
-    }
-    async openTokenModal() {
-      if (!this.allTokens.length) {
-        const graphEndpoint = this.options.config.graphEndpoint;
-        this.allTokens = await this.swapService.getTokensFromGraph(graphEndpoint);
-      }
-      this.displayedTokens = this.allTokens;
-      this.tokenModal = document.createElement("div");
-      this.tokenModal.className = "swap-widget-token-modal-overlay";
-      this.tokenModal.innerHTML = `
-      <div class="swap-widget-token-modal">
-        <div class="token-modal-header">
-          <span>Select a token</span>
-          <button class="token-modal-close" id="token-modal-close">&times;</button>
-        </div>
-        <input type="text" class="token-modal-search" id="token-modal-search" placeholder="Search token by symbol or name" />
-        <div class="token-modal-list" id="token-modal-list">
-          ${this.renderTokenList(this.displayedTokens)}
-        </div>
-      </div>
-    `;
-      document.body.appendChild(this.tokenModal);
-      document.getElementById("token-modal-close")?.addEventListener("click", () => this.closeTokenModal());
-      this.tokenModal.querySelectorAll(".token-modal-item").forEach((el) => {
-        el.addEventListener("click", (e) => {
-          const address = el.getAttribute("data-address");
-          this.onTokenSelected(address);
-        });
-      });
-      const searchInput = document.getElementById("token-modal-search");
-      if (searchInput) {
-        searchInput.addEventListener("input", (e) => {
-          const value = e.target.value;
-          const list = this.tokenModal?.querySelector("#token-modal-list");
-          if (list) {
-            list.innerHTML = '<div class="token-modal-loading">Loading...</div>';
-          }
-          if (this.tokenSearchDebounceTimer)
-            clearTimeout(this.tokenSearchDebounceTimer);
-          this.tokenSearchDebounceTimer = setTimeout(() => {
-            this.onTokenSearch(value);
-          }, 300);
-        });
-      }
-    }
-    renderTokenList(tokens) {
-      if (!tokens.length) {
-        return '<div class="token-modal-empty">No tokens found</div>';
-      }
-      return tokens.map((token) => `
-      <div class="token-modal-item" data-address="${token.address}">
-        <div class="token-modal-token-info">
-          <span class="token-modal-symbol">${token.symbol}</span>
-          <span class="token-modal-name">${token.name}</span>
-        </div>
-      <div class="token-modal-address">${token.address}</div>
-      </div>
-    `).join("");
-    }
-    async onTokenSearch(query) {
-      const graphEndpoint = this.options.config.graphEndpoint;
-      let filtered = [];
-      if (query.trim()) {
-        filtered = await this.swapService.getTokensFromGraph(graphEndpoint, query.trim());
-      } else {
-        filtered = this.allTokens;
-      }
-      this.displayedTokens = filtered;
-      const list = this.tokenModal?.querySelector("#token-modal-list");
-      if (list) {
-        list.innerHTML = this.renderTokenList(filtered);
-        list.querySelectorAll(".token-modal-item").forEach((el) => {
-          el.addEventListener("click", (e) => {
-            const address = el.getAttribute("data-address");
-            this.onTokenSelected(address);
-          });
-        });
-      }
-    }
-    onTokenSelected(address) {
-      const token = this.displayedTokens.find((t) => t.address === address);
-      if (!token)
-        return;
-      if (this.tokenModalSection === "sell") {
-        this.sellToken = token;
-      } else if (this.tokenModalSection === "buy") {
-        this.buyToken = token;
-      }
-      this.tradePath = [];
-      this.updateTokenDisplay();
-      this.updateBalances();
-      this.closeTokenModal();
-      if (this.sellToken && this.buyToken && this.sellAmount && parseFloat(this.sellAmount) > 0) {
-        this.onSellAmountChange();
-      }
-    }
-    closeTokenModal() {
-      if (this.tokenModal) {
-        document.body.removeChild(this.tokenModal);
-        this.tokenModal = null;
-        this.tokenModalSection = null;
-      }
-    }
-    onSwitchTokens() {
-      const tempToken = this.sellToken;
-      const tempAmount = this.sellAmount;
-      this.sellToken = this.buyToken;
-      this.buyToken = tempToken;
-      this.sellAmount = this.buyAmount;
-      this.buyAmount = "0";
-      if (this.sellToken && this.buyToken) {
-        this.tradePath = [this.sellToken.address, this.buyToken.address];
-      }
-      this.updateTokenDisplay();
-      this.updateAmountDisplay();
-      this.updateBalances();
-      if (this.sellToken && this.buyToken && this.sellAmount && parseFloat(this.sellAmount) > 0) {
-        this.onSellAmountChange();
-      }
-    }
-    calculateMinAmountOut() {
-      if (!this.buyToken) {
-        return 0n;
-      }
-      const slippageFactor = 1e4 - Math.floor(parseFloat(this.settings.maxSlippage) * 100);
-      const amountOutBigInt = BigInt(
-        parseUnits(
-          this.buyAmount,
-          this.buyToken.decimals
-        ).toString()
-      );
-      return amountOutBigInt * BigInt(slippageFactor) / BigInt(1e4);
-    }
-    async onSwapClick() {
-      if (!this.canSwap()) {
-        return;
-      }
-      try {
-        this.state.isSwapping = true;
-        this.updateButtons();
-        if (this.sellToken && this.buyToken) {
-          const amountOutBigInt = BigInt(
-            parseUnits(
-              this.buyAmount,
-              this.buyToken.decimals
-            ).toString()
-          );
-          const amountOutMin = parseUnits(this.minAmountOut, this.buyToken.decimals);
-          console.log("Swap details:", {
-            sellAmount: this.sellAmount.trim(),
-            expectedOutput: amountOutBigInt,
-            slippage: this.settings.maxSlippage + "%",
-            amountOutMin,
-            path: this.tradePath
-          });
-          const txHash = await this.swapService.swapTokens(
-            this.sellToken,
-            this.buyToken,
-            parseUnits(this.sellAmount.trim(), this.sellToken.decimals),
-            amountOutMin,
-            this.tradePath,
-            this.settings.swapDeadline,
-            this.settings
-          );
-          this.state.transactionHash = txHash;
-          this.state.success = true;
-          if (this.options.onSwapSuccess) {
-            this.options.onSwapSuccess(txHash);
-          }
-          this.sellAmount = "0";
-          this.buyAmount = "0";
-          this.updateAmountDisplay();
-          this.state.isSwapping = false;
-          this.updateButtons();
-          this.updateBalances();
-        }
-      } catch (error) {
-        console.error("Error during swap:", error);
-        this.state.error = error instanceof Error ? error.message : "Unknown error";
-        if (this.options.onErrorEvent) {
-          this.options.onErrorEvent(this.state.error);
-        }
-        if (this.options.onSwapError) {
-          this.options.onSwapError(this.state.error);
-        }
-      } finally {
-        this.state.isSwapping = false;
-        this.updateButtons();
-      }
-    }
-    async onConnectWalletClick() {
-      if (!this.walletService.isConnected()) {
-        try {
-          await this.walletService.connect();
-        } catch (error) {
-          console.error("Error connecting wallet:", error);
-          const errorMessage = error instanceof Error ? error.message : "Failed to connect wallet";
-          this.state.error = errorMessage;
-          if (this.options.onErrorEvent) {
-            this.options.onErrorEvent(errorMessage);
-          }
-        }
-      } else {
-        this.walletService.disconnect();
-      }
-    }
-    canSwap() {
-      return !!(this.walletService.isConnected() && this.sellToken && this.buyToken && this.sellAmount && parseFloat(this.sellAmount) > 0 && this.buyAmount && parseFloat(this.buyAmount) > 0 && !this.state.isCalculating && !this.state.isSwapping);
-    }
-    getSwapButtonText() {
-      if (!this.sellToken || !this.buyToken) {
-        return "Select Tokens";
-      }
-      if (!this.sellAmount || parseFloat(this.sellAmount) === 0) {
-        return "Enter Amount";
-      }
-      if (this.state.isCalculating) {
-        return "Loading...";
-      }
-      if (this.state.isSwapping) {
-        return "Swapping...";
-      }
-      return "Swap";
-    }
-    getConnectWalletButtonText() {
-      if (this.walletService.isConnected()) {
-        const address = this.walletService.getAddress();
-        if (address) {
-          return `${address.slice(0, 6)}...${address.slice(-4)}`;
-        }
-        return "Disconnect Wallet";
-      }
-      return "Connect Wallet";
-    }
-    updateTokenDisplay() {
-      const sellTokenBtn = document.getElementById("sell-token-btn");
-      const buyTokenBtn = document.getElementById("buy-token-btn");
-      if (sellTokenBtn) {
-        sellTokenBtn.textContent = this.sellToken ? this.sellToken.symbol : "Select Token";
-      }
-      if (buyTokenBtn) {
-        buyTokenBtn.textContent = this.buyToken ? this.buyToken.symbol : "Select Token";
-      }
-    }
-    updateAmountDisplay() {
-      const sellAmountInput = document.getElementById("sell-amount");
-      const buyAmountInput = document.getElementById("buy-amount");
-      if (sellAmountInput) {
-        sellAmountInput.value = this.sellAmount;
-      }
-      if (buyAmountInput) {
-        buyAmountInput.value = this.buyAmount;
-      }
-      const minAmountElement = document.getElementById("min-amount");
-      if (minAmountElement) {
-        minAmountElement.textContent = this.minAmountOut;
-      }
-    }
-    async updateBalances() {
-      if (!this.walletService.isConnected()) {
-        const sellBalanceElement = document.getElementById("sell-balance");
-        const buyBalanceElement = document.getElementById("buy-balance");
-        if (sellBalanceElement) {
-          sellBalanceElement.textContent = "0.0";
-        }
-        if (buyBalanceElement) {
-          buyBalanceElement.textContent = "0.0";
-        }
-        return;
-      }
-      try {
-        if (this.sellToken) {
-          const sellBalanceElement = document.getElementById("sell-balance");
-          if (sellBalanceElement) {
-            try {
-              let balance;
-              if (this.sellToken.address === "0x0000000000000000000000000000000000000000") {
-                balance = await this.walletService.getBalance();
-              } else {
-                balance = await this.walletService.getTokenBalance(this.sellToken.address);
-              }
-              sellBalanceElement.textContent = balance;
-            } catch (error) {
-              console.error("Error getting sell token balance:", error);
-              sellBalanceElement.textContent = "0.0";
-            }
-          }
-        }
-        if (this.buyToken) {
-          const buyBalanceElement = document.getElementById("buy-balance");
-          if (buyBalanceElement) {
-            try {
-              let balance;
-              if (this.buyToken.address === "0x0000000000000000000000000000000000000000") {
-                balance = await this.walletService.getBalance();
-              } else {
-                balance = await this.walletService.getTokenBalance(this.buyToken.address);
-              }
-              buyBalanceElement.textContent = balance;
-            } catch (error) {
-              console.error("Error getting buy token balance:", error);
-              buyBalanceElement.textContent = "0.0";
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Error updating balances:", error);
-      }
-    }
-    updateSwapButton() {
-      if (this.swapButton) {
-        this.swapButton.textContent = this.getSwapButtonText();
-        this.swapButton.className = `swap-button ${this.canSwap() ? "enabled" : "disabled"}`;
-      }
-    }
-    updateButtons() {
-      if (this.swapButton) {
-        this.swapButton.textContent = this.getSwapButtonText();
-        this.swapButton.disabled = !this.canSwap();
-      }
-    }
-    startPeriodicUpdates() {
-      if (this.updateInterval) {
-        clearInterval(this.updateInterval);
-      }
-      this.updateInterval = setInterval(async () => {
-        if (this.state.isSwapping) {
-          return;
-        }
-        try {
-          await this.updateBalances();
-          if (this.sellToken && this.buyToken && this.sellAmount && parseFloat(this.sellAmount) > 0) {
-            await this.onSellAmountChange();
-          }
-        } catch (error) {
-          console.error("Error during periodic update:", error);
-        }
-      }, 2e4);
-    }
-    stopPeriodicUpdates() {
-      if (this.updateInterval) {
-        clearInterval(this.updateInterval);
-        this.updateInterval = null;
-      }
-    }
-    // Public API methods
     async connectWallet() {
       const address = await this.walletService.connect();
       const signer = this.walletService.getSigner();
-      if (signer) {
+      if (signer)
         this.swapService.setSigner(signer);
-      }
       return address;
     }
     disconnectWallet() {
       this.walletService.disconnect();
       this.swapService.setSigner(null);
-      this.updateButtons();
-    }
-    setTokens(sellToken, buyToken) {
-      this.sellToken = sellToken;
-      this.buyToken = buyToken;
-      this.updateTokenDisplay();
-    }
-    setAmounts(sellAmount, buyAmount) {
-      this.sellAmount = sellAmount;
-      this.buyAmount = buyAmount;
-      this.minAmountOut = formatUnits(this.calculateMinAmountOut().toString(), this.buyToken.decimals).toString();
-      this.updateAmountDisplay();
-    }
-    setSettings(settings) {
-      this.settings = settings;
     }
     getState() {
-      return { ...this.state };
+      return this.state;
     }
-    destroy() {
-      this.container.innerHTML = "";
-      this.stopPeriodicUpdates();
+    get settings() {
+      return {
+        ...DEFAULT_SETTINGS,
+        ...this.input.settings || {}
+      };
     }
-    // Public method to show error dialog (for testing and external use)
-    showError(message) {
-      this.state.error = message;
-      if (this.options.onErrorEvent) {
-        this.options.onErrorEvent(message);
+    async calculateQuoteIfNeeded() {
+      const { fromToken, toToken, amount, isOutputAmount } = this.input;
+      if (!fromToken || !toToken || !amount || amount <= 0) {
+        return;
+      }
+      this.setChange({ loader: 1 /* CALCULATING_QUOTE */, error: void 0 });
+      try {
+        const tradeResult = await this.swapService.calculateTrade(
+          fromToken,
+          toToken,
+          String(amount),
+          isOutputAmount == true,
+          // isOutputAmount: true for input amount, false for output amount
+          this.settings.maxSlippage
+        );
+        this.setChange({
+          computed: tradeResult.computed,
+          tradeInfo: tradeResult.trade,
+          loader: null
+        });
+      } catch (error) {
+        this.setChange({ error: error?.message || String(error), loader: null });
       }
     }
-    // Public method to connect to a specific wallet provider
-    async connectToWalletProvider(provider) {
-      return this.walletService.connectToProvider(provider);
+    async setData(input) {
+      this.input = {
+        ...this.input,
+        ...input
+      };
+      await this.calculateQuoteIfNeeded();
+    }
+    async approveIfNeeded() {
+      if (!this.input || !this.walletService.isConnected())
+        throw new Error("Wallet not connected or input missing");
+      const { fromToken, amount } = this.input;
+      if (!fromToken || amount === void 0 || !this.state.computed?.amountInRaw)
+        throw new Error("fromToken or amount missing");
+      this.setChange({ loader: 2 /* APPROVING */ });
+      try {
+        const tx = await this.swapService?.approveIfNeedApproval(
+          fromToken,
+          BigInt(this.state.computed.amountInRaw)
+        );
+        let receipt;
+        if (tx) {
+          this.setChange({ approveTxHash: tx.hash });
+          receipt = await tx.wait();
+          if (!receipt) {
+            throw new Error("Receipt not found, Please try again");
+          }
+          if (receipt.status != 1) {
+            throw new Error("Transaction Rejected");
+          }
+        }
+        return receipt?.hash;
+      } catch (error) {
+        this.setChange({ error: error?.message || String(error), loader: null });
+        throw error;
+      }
+    }
+    async swap() {
+      try {
+        this.setChange({
+          txHash: void 0,
+          approveTxHash: void 0
+        });
+        const { fromToken, toToken, amount, isOutputAmount } = this.input;
+        if (!fromToken || !toToken || amount === void 0)
+          throw new Error("Tokens or amount not set");
+        await this.approveIfNeeded();
+        this.setChange({ loader: 3 /* SWAPPING */ });
+        const trade = this.state.tradeInfo;
+        if (!trade)
+          throw new Error("Trade info missing - calculate quote first");
+        const path = trade.route.path.map((token) => token.address);
+        if (path.length === 0)
+          throw new Error("Trade path missing");
+        const computed = this.state.computed;
+        if (!computed)
+          throw new Error("Computed amounts missing");
+        const transaction = await this.swapService.swapTokens(
+          fromToken,
+          toToken,
+          computed.maxAmountInRaw || computed.amountInRaw,
+          computed.minAmountOutRaw || computed.amountOutRaw,
+          path,
+          this.input.isOutputAmount == true,
+          this.settings.swapDeadline
+        );
+        this.setChange({ txHash: transaction.hash });
+        const receipt = await transaction.wait();
+        if (!receipt) {
+          throw new Error("Receipt not found, Please try again");
+        }
+        if (receipt.status != 1) {
+          throw new Error("Transaction Rejected");
+        }
+        this.setChange({
+          loader: null
+        });
+        return receipt.hash;
+      } catch (error) {
+        this.setChange({ error: error?.message || String(error), loader: null });
+        throw error;
+      }
+    }
+    async getPartnerFee() {
+      return Number(await this.swapService.loadPartnerFee()) / Number(PARTNER_FEE_BPS_DIVISOR);
     }
   };
 
@@ -33596,37 +33113,17 @@ var SwapWidget = (() => {
   };
 
   // src/index.ts
-  async function createSwapWidget(options) {
+  function createKaspaComSwapController(options) {
     let resolvedOptions;
-    if (typeof options === "string") {
-      const config = NETWORKS[options];
-      if (!config)
-        throw new Error(`Unknown network key: ${options}`);
-      resolvedOptions = {
-        containerId: "swap-widget",
-        config
-      };
-    } else if ("config" in options && typeof options.config === "string") {
-      const config = NETWORKS[options.config];
-      if (!config)
-        throw new Error(`Unknown network key: ${options.config}`);
-      resolvedOptions = { ...options, config };
+    if ("networkConfig" in options && typeof options.networkConfig === "string") {
+      const networkConfig = NETWORKS[options.networkConfig];
+      if (!networkConfig)
+        throw new Error(`Unknown network key: ${options.networkConfig}`);
+      resolvedOptions = { ...options, networkConfig };
     } else {
       resolvedOptions = options;
     }
-    const widget = new SwapWidget(resolvedOptions);
-    return widget;
-  }
-  async function initSwapWidget(containerId, config) {
-    let resolvedConfig;
-    if (typeof config === "string") {
-      resolvedConfig = NETWORKS[config];
-      if (!resolvedConfig)
-        throw new Error(`Unknown network key: ${config}`);
-    } else {
-      resolvedConfig = config;
-    }
-    return createSwapWidget({ containerId, config: resolvedConfig });
+    return new SwapWidgetController(resolvedOptions);
   }
   return __toCommonJS(src_exports);
 })();

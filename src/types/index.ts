@@ -1,4 +1,6 @@
+import { Trade } from "@uniswap/v2-sdk";
 import { SwapWidgetNetworkConfig } from "./networks";
+import { Currency, TradeType } from "@uniswap/sdk-core";
 
 export interface Erc20Token {
   address: string;
@@ -35,30 +37,44 @@ export interface SwapSectionData {
 }
 
 export interface SwapWidgetOptions {
-  containerId: string;
-  config: SwapWidgetNetworkConfig | string;
-  theme?: 'light' | 'dark';
-  walletProvider?: any; // Custom wallet provider (e.g., MetaMask, WalletConnect, etc.)
-  onSwapSuccess?: (txHash: string) => void;
-  onSwapError?: (error: string) => void;
-  onConnectWallet?: (walletAddress: string) => void;
-  onDisconnectWallet?: () => void;
-  initialTokens?: Erc20Token[];
-  onGetTokenBalance?: (tokenAddress: string) => Promise<string>;
-  onErrorEvent?: (error: string) => void;
+  networkConfig: SwapWidgetNetworkConfig | string;
+  walletProvider: any; // Custom wallet provider (e.g., MetaMask, WalletConnect, etc.)
   partnerKey?: string;
+  onChange?: (state: SwapControllerOutput, patch: Partial<SwapControllerOutput>) => void;
 }
 
-export type SwapActionType = 'buy' | 'sell';
 
-export interface Trade {
-  route: {
-    path: Erc20Token[];
-  };
-  outputAmount: {
-    toSignificant: (decimals: number) => string;
-  };
-  priceImpact: {
-    toSignificant: (decimals: number) => string;
-  };
+
+export interface SwapControllerInput {
+  fromToken?: Erc20Token | null;
+  toToken?: Erc20Token | null;
+  amount?: number;
+  isOutputAmount?: boolean;
+  settings?: Partial<SwapSettings>;
+}
+
+export enum LoaderStatuses {
+  CALCULATING_QUOTE = 1,
+  APPROVING = 2,
+  SWAPPING = 3,
+}
+
+export interface ComputedAmounts {
+  maxAmountIn?: string,
+  minAmountOut?: string,
+  amountIn: string,
+  amountOut: string,
+  amountInRaw: string,
+  amountOutRaw: string,
+  maxAmountInRaw?: string,
+  minAmountOutRaw?: string,
+}
+
+export interface SwapControllerOutput {
+  error?: string;
+  txHash?: string;
+  approveTxHash?: string;
+  tradeInfo?: Trade<Currency, Currency, TradeType.EXACT_INPUT> | Trade<Currency, Currency, TradeType.EXACT_OUTPUT>;
+  computed?: ComputedAmounts;
+  loader: LoaderStatuses | null;
 } 

@@ -1,13 +1,6 @@
 import { Contract, BrowserProvider, JsonRpcProvider, Signer, parseUnits, formatUnits } from 'ethers';
 import { SwapWidgetNetworkConfig } from '../types/networks';
 
-// Extend Window interface to include ethereum
-declare global {
-  interface Window {
-    ethereum?: any;
-  }
-}
-
 export class WalletService {
   private networkProvider: JsonRpcProvider;
   private walletProvider: BrowserProvider | null = null; // ethers.js BrowserProvider for wallet
@@ -21,8 +14,6 @@ export class WalletService {
 
   constructor(
     config: SwapWidgetNetworkConfig,
-    onConnectWallet?: (walletAddress: string) => void,
-    onDisconnectWallet?: () => void,
     walletProvider?: any
   ) {
     this.config = config;
@@ -30,51 +21,11 @@ export class WalletService {
       name: config.name,
       chainId: config.chainId,
     }, config.additionalJsonRpcApiProviderOptionsOptions);
-    this.onConnectWalletCallback = onConnectWallet;
-    this.onDisconnectWalletCallback = onDisconnectWallet;
     this.customWalletProvider = walletProvider;
     
     // Auto-connect if wallet provider is provided
     if (this.customWalletProvider) {
       this.connect();
-    }
-  }
-
-  private setupEthereumListeners(): void {
-    if (typeof window !== 'undefined' && window.ethereum) {
-      this.ethereumWalletProvider = window.ethereum;
-
-      if (!this.ethereumWalletProvider) {
-        return;
-      }
-      // Listen for account changes
-      this.ethereumWalletProvider.on('accountsChanged', (accounts: string[]) => {
-        if (accounts.length === 0) {
-          // User disconnected their wallet
-          this.disconnect();
-        } else {
-          // User switched accounts
-          this.address = accounts[0];
-          this.updateWalletProvider();
-        }
-      });
-
-      // Listen for chain changes
-      this.ethereumWalletProvider.on('chainChanged', (chainId: string) => {
-        const newChainId = parseInt(chainId, 16);
-        if (newChainId !== this.config.chainId) {
-          // Chain changed to different network
-          this.disconnect();
-        } else {
-          // Chain changed to our network, update provider
-          this.updateWalletProvider();
-        }
-      });
-
-      // Listen for disconnect
-      this.ethereumWalletProvider.on('disconnect', () => {
-        this.disconnect();
-      });
     }
   }
 
@@ -90,17 +41,12 @@ export class WalletService {
   }
 
   async connect(): Promise<string> {
-    // Use custom wallet provider if available, otherwise fall back to window.ethereum
-    const provider = this.customWalletProvider || (typeof window !== 'undefined' && window.ethereum);
+    const etheriumProvider = this.customWalletProvider;
 
-    if (!provider) {
-      this.setupEthereumListeners();
-    }
-    const effectiveProvider = this.customWalletProvider || (typeof window !== 'undefined' && window.ethereum);
-    if (!effectiveProvider) {
+    if (!etheriumProvider) {
       throw new Error('No Ethereum wallet detected. Please install MetaMask or another Ethereum wallet.');
     }
-    this.ethereumWalletProvider = effectiveProvider;
+    this.ethereumWalletProvider = etheriumProvider;
     try {
       // Request account access
       const accounts = await this.ethereumWalletProvider.request({

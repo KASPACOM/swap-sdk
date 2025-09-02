@@ -1,8 +1,10 @@
-import { BigNumberish, Contract, Signer, BrowserProvider, JsonRpcProvider, parseUnits, formatUnits, ZeroAddress, ethers, hexlify } from 'ethers';
-import { CurrencyAmount, Token, TradeType } from '@uniswap/sdk-core';
+import { BigNumberish, Contract, Signer, BrowserProvider, JsonRpcProvider, parseUnits, formatUnits, ZeroAddress, ethers, hexlify, ContractTransactionResponse, TransactionResponse } from 'ethers';
+import { Currency, CurrencyAmount, Percent, Token, TradeType } from '@uniswap/sdk-core';
 import { Trade, Pair, Route } from '@uniswap/v2-sdk';
-import { Erc20Token, SwapSettings, SwapWidgetOptions } from '../types';
+import { ComputedAmounts, Erc20Token, SwapWidgetOptions } from '../types';
 import { SwapWidgetNetworkConfig } from '../types/networks';
+
+export const PARTNER_FEE_BPS_DIVISOR = 10_000n;
 
 export class SwapService {
   private provider: BrowserProvider | JsonRpcProvider;
@@ -17,7 +19,7 @@ export class SwapService {
   private resolvePairsLoaded: (() => void) | null = null;
   private partnerFeeLoadedPromise: Promise<void>;
   private resolvePartnerFeeLoaded: (() => void) | null = null;
-  private partnerFee: number = 0;
+  private partnerFee: bigint = 0n;
   private isFeeActive: boolean = false;
 
   private wethToken: Erc20Token | undefined;
@@ -36,14 +38,23 @@ export class SwapService {
 
     // Router ABI for swap functions
     const routerAbi = [
+      // Swaps (ERC20 <-> ERC20)
       'function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)',
-      'function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)',
       'function swapTokensForExactTokens(uint amountOut, uint amountInMax, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)',
+
+      // Swaps (ETH <-> ERC20)
+      'function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)',
+      'function swapETHForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)',
       'function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)',
+      'function swapTokensForExactETH(uint amountOut, uint amountInMax, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)',
+
+      // Get Amounts
       'function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts)',
       'function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut) external pure returns (uint amountOut)',
       'function getAmountIn(uint amountOut, uint reserveIn, uint reserveOut) internal pure returns (uint amountIn)',
       'function getAmountsIn(address factory, uint amountOut, address[] memory path) internal view returns (uint[] memory amounts)',
+
+      // Get WETH
       'function WETH() external pure returns (address)'
     ];
 
@@ -78,12 +89,17 @@ export class SwapService {
     this.loadPartnerFee();
   }
 
-  private async loadPartnerFee(): Promise<void> {
+  // parnter fee is BPS_DIVISOR = 10_000n;
+  async loadPartnerFee(): Promise<bigint> {
+    if (!this.resolvePairsLoaded) {
+      return this.partnerFee;
+    }
     if (this.swapOptions.partnerKey) {
       const [, fee] = await this.proxyContract?.partnerFee(this.swapOptions.partnerKey);
-      this.partnerFee = Number(fee) / 10000;
-      this.partnerFee = 1; // Currently taking all, when new proxy will arrive we will need to delete this
+      this.partnerFee = fee;
     }
+
+    this.partnerFee = 100n; // Currently taking all, when new proxy will arrive we will need to delete this
 
     const isFeeActive = await this.proxyContract?.feeEnabled();
     this.isFeeActive = isFeeActive;
@@ -92,6 +108,8 @@ export class SwapService {
       this.resolvePartnerFeeLoaded();
       this.resolvePartnerFeeLoaded = null;
     }
+
+    return this.partnerFee;
   }
 
   setSigner(signer: Signer): void {
@@ -262,12 +280,12 @@ export class SwapService {
    * Finds the best trade path using Uniswap SDK for a given input amount.
    * Returns the best path as an array of addresses, or null if no trade found.
    */
-  private async getBestTradePath(
+  private async getBestTrade(
     fromToken: Erc20Token,
     toToken: Erc20Token,
     amountInWei: string,
-  ): Promise<string[] | null> {
-    console.log('Getting trade best path');
+    isOutputAmount?: boolean,
+  ): Promise<Trade<Currency, Currency, TradeType.EXACT_INPUT> | Trade<Currency, Currency, TradeType.EXACT_OUTPUT> | null> {
 
     // Create Uniswap SDK Token instances
     const sdkFromToken = new Token(
@@ -288,7 +306,7 @@ export class SwapService {
 
     // Create currency amount
     const currencyAmount = CurrencyAmount.fromRawAmount(
-      sdkFromToken,
+      isOutputAmount ? sdkToToken : sdkFromToken,
       amountInWei,
     );
     await this.waitForPairsLoaded();
@@ -299,72 +317,125 @@ export class SwapService {
       throw new Error('Pairs not loaded yet. Please wait for initialization.');
     }
 
-    const trades = Trade.bestTradeExactIn(
-      pairs,
-      currencyAmount,
-      sdkToToken,
-      {
-        maxHops: 3,
-        maxNumResults: 3,
-      },
-    );
+    const tradeConfig = {
+      maxHops: 3,
+      maxNumResults: 1,
+    };
+
+    const trades = isOutputAmount ?
+      Trade.bestTradeExactOut(pairs, sdkFromToken, currencyAmount, tradeConfig)
+      : Trade.bestTradeExactIn(
+        pairs,
+        currencyAmount,
+        sdkToToken,
+        tradeConfig,
+      );
 
     if (trades.length > 0) {
-      const bestTrade = trades[0];
-      return bestTrade.route.path.map((token) => token.address);
+      return trades[0];
     } else {
       return null;
     }
   }
 
 
-  async calculateExpectedOutput(
+  /**
+   * 
+   * @param sellToken 
+   * @param buyToken 
+   * @param targetAmount 
+   * @param isOutputAmount true if user input output (How much tokens to receive) and not input (how much tokens to sell)
+   * @param slippage 
+   * @returns 
+   */
+  async calculateTrade(
     sellToken: Erc20Token,
     buyToken: Erc20Token,
-    amountIn: string,
+    targetAmount: string,
+    isOutputAmount: boolean,
+    slippage: string,
   ): Promise<{
-    amount: string,
-    path: string[],
+    trade: Trade<Currency, Currency, TradeType.EXACT_INPUT> | Trade<Currency, Currency, TradeType.EXACT_OUTPUT>,
+    computed: ComputedAmounts,
   }> {
     try {
+
       // Round the input amount to avoid parseUnits errors
-      const roundedAmountIn = this.roundToDecimals(amountIn, sellToken.decimals);
-      const sellAmountWei = parseUnits(
+      const roundedAmountIn = this.roundToDecimals(targetAmount, sellToken.decimals);
+
+      let sellAmountWei = parseUnits(
         roundedAmountIn,
-        sellToken.decimals,
+        isOutputAmount ? buyToken.decimals : sellToken.decimals,
       );
 
+      if (isOutputAmount && this.partnerFee && this.partnerFee > 0n) {
+        // For Exact receice - Add partner fee to the final result
+        const numerator = sellAmountWei * PARTNER_FEE_BPS_DIVISOR;
+        const denominator = PARTNER_FEE_BPS_DIVISOR - this.partnerFee;
+      
+        // Use ceiling division to avoid rounding down
+        sellAmountWei = (numerator + denominator - 1n) / denominator;
+      }
+
+
       // Get the best path
-      const bestPath = await this.getBestTradePath(
+      const trade = await this.getBestTrade(
         sellToken.address == ethers.ZeroAddress ? this.wethToken! : sellToken,
         buyToken.address == ethers.ZeroAddress ? this.wethToken! : buyToken,
         sellAmountWei.toString(),
+        isOutputAmount,
       );
 
-      if (!bestPath) {
+      if (!trade) {
         throw new Error('No trade path found for the given tokens and amount.');
       }
 
-      // Use routerContract to get expected output
-      const amountsOut = await this.routerContract.getAmountsOut(sellAmountWei, bestPath);
-      let expectedOutput = amountsOut[amountsOut.length - 1];
+      const amountIn = trade.inputAmount.quotient.toString();
+      const amountOut = trade.outputAmount.quotient.toString();
 
-      if (this.partnerFee) {
-        console.log('Partner fee:', this.partnerFee);
-        console.log('Expected output:', expectedOutput);
-        expectedOutput = BigInt(Math.floor(Number(expectedOutput) * ((100 - this.partnerFee) / 100)));
-        console.log('Expected output after partner fee:', expectedOutput);
+      let amounts: ComputedAmounts = {
+        amountIn: formatUnits(amountIn, sellToken.decimals),
+        amountOut: isOutputAmount ? targetAmount : formatUnits(amountOut, buyToken.decimals),
+        amountInRaw: amountIn,
+        amountOutRaw: amountOut,
+      };
+
+      const slippagePercent = new Percent(Math.round(parseFloat(slippage) * 100), 10000);
+
+      let maxAmountIn, minAmountOut;
+
+      if (isOutputAmount) {
+        maxAmountIn = trade.maximumAmountIn(slippagePercent).quotient.toString();
+        amounts.maxAmountInRaw = maxAmountIn;
+        amounts.maxAmountIn = formatUnits(maxAmountIn, sellToken.decimals);
+      } else {
+        minAmountOut = trade.minimumAmountOut(slippagePercent).quotient.toString();
+        amounts.minAmountOutRaw = minAmountOut;
+        amounts.minAmountOut = formatUnits(minAmountOut, buyToken.decimals);
       }
 
-      // Convert bigint to human-readable string
-      let expectedOutputHumanReadable = formatUnits(
-        expectedOutput.toString(),
-        buyToken.decimals,
-      );
+      if (this.partnerFee && this.partnerFee > 0n) {
+        if (!isOutputAmount) {
+          // ---- Exact input: remove partner fee from amountOut ----
+          const amountOut = BigInt(trade.outputAmount.quotient.toString());
+          const amountOutMinusFee = (amountOut * (PARTNER_FEE_BPS_DIVISOR - this.partnerFee)) / PARTNER_FEE_BPS_DIVISOR;
+
+          amounts.amountOutRaw = amountOutMinusFee.toString();
+          amounts.amountOut = formatUnits(amountOutMinusFee, buyToken.decimals);
+
+          if (minAmountOut) {
+            const minOut = BigInt(minAmountOut.toString());
+            const minOutMinusFee = (minOut * (PARTNER_FEE_BPS_DIVISOR - this.partnerFee)) / PARTNER_FEE_BPS_DIVISOR;
+
+            amounts.minAmountOutRaw = minOutMinusFee.toString();
+            amounts.minAmountOut = formatUnits(minOutMinusFee, buyToken.decimals);
+          }
+        }
+      }
 
       return {
-        amount: expectedOutputHumanReadable,
-        path: bestPath,
+        trade,
+        computed: amounts,
       }
     } catch (error) {
       console.error('Error calculating expected output:', error);
@@ -398,42 +469,43 @@ export class SwapService {
     }
   }
 
-  async approveToken(
-    tokenAddress: string,
-    spenderAddress: string,
-    amount: string
-  ): Promise<string> {
+  async approveIfNeedApproval(
+    fromToken: Erc20Token,
+    amountInWei: bigint,
+  ): Promise<ContractTransactionResponse | null> {
     if (!this.signer) {
       throw new Error('Signer not set');
     }
 
-    try {
+    // If fromToken is not native, check allowance and approve if needed
+    if (fromToken.address !== ethers.ZeroAddress) {
       const tokenContract = new Contract(
-        tokenAddress,
-        ['function approve(address,uint256) returns (bool)'],
+        fromToken.address,
+        ['function allowance(address,address) view returns (uint256)', 'function approve(address,uint256) returns (bool)'],
         this.signer
       );
 
-      const amountWei = parseUnits(amount, 18);
-      const tx = await tokenContract.approve(spenderAddress, amountWei);
-      const receipt = await tx.wait();
+      const signerAddress = await this.signer.getAddress();
 
-      return receipt.hash;
-    } catch (error) {
-      console.error('Error approving token:', error);
-      throw error;
+      const allowanceTo = this.config.proxyAddress || this.config.routerAddress;
+      const allowance: bigint = await tokenContract.allowance(signerAddress, allowanceTo);
+      if (allowance < amountInWei) {
+        return await tokenContract.approve(allowanceTo, ethers.MaxUint256);
+      }
     }
+
+    return null;
   }
 
   async swapTokens(
     fromToken: Erc20Token,
     toToken: Erc20Token,
-    amountInWei: bigint,
-    amountOutMinWei: bigint,
+    amountInWei: string,
+    amountOutWei: string,
     path: string[],
+    isOutputAmount: boolean,
     deadline: number,
-    settings: SwapSettings
-  ): Promise<string> {
+  ): Promise<TransactionResponse> {
     if (!this.signer) {
       throw new Error('Signer not set');
     }
@@ -444,38 +516,47 @@ export class SwapService {
 
       let tx;
       const signerAddress = await this.signer.getAddress();
+      const iface = this.proxyContract ? this.proxyContract.interface : this.routerContract.interface;
 
-      // If fromToken is not native, check allowance and approve if needed
-      if (fromToken.address !== ethers.ZeroAddress) {
-        const tokenContract = new Contract(
-          fromToken.address,
-          ['function allowance(address,address) view returns (uint256)', 'function approve(address,uint256) returns (bool)'],
-          this.signer
-        );
+      let swapData: string;
 
-        const allowanceTo = this.config.proxyAddress || this.config.routerAddress;
-        const allowance: bigint = await tokenContract.allowance(signerAddress, allowanceTo);
-        if (allowance < amountInWei) {
-          // Approve MaxUint256 for router
-          const approveTx = await tokenContract.approve(allowanceTo, ethers.MaxUint256);
-          await approveTx.wait();
+
+      const to = this.isFeeActive ? this.config.proxyAddress : signerAddress;
+
+      if (isOutputAmount) {
+        // Buy mode: user specifies output amount (isOutputAmount === true)
+        if (fromToken.address === ethers.ZeroAddress) {
+          // ETH -> token (swapETHForExactTokens)
+          swapData = iface.encodeFunctionData("swapETHForExactTokens", [
+            amountOutWei,
+            path,
+            to,
+            deadlineTimestamp
+          ]);
+        } else if (toToken.address === ethers.ZeroAddress) {
+          // token -> ETH (swapTokensForExactETH)
+          swapData = iface.encodeFunctionData("swapTokensForExactETH", [
+            amountOutWei,
+            amountInWei,
+            path,
+            to,
+            deadlineTimestamp
+          ]);
+        } else {
+          // token -> token (swapTokensForExactTokens)
+          swapData = iface.encodeFunctionData("swapTokensForExactTokens", [
+            amountOutWei,
+            amountInWei,
+            path,
+            to,
+            deadlineTimestamp
+          ]);
         }
-      }
-
-
-      if (this.proxyContract) {
-        console.log(amountInWei, amountOutMinWei, path, deadlineTimestamp);
-        let swapData: string;
-        const iface = this.proxyContract.interface;
-
-        console.log('signer address', signerAddress);
-
-        const to = this.isFeeActive ? this.config.proxyAddress : signerAddress;
-
+      } else {
         if (fromToken.address === ethers.ZeroAddress) {
           // ETH -> token
           swapData = iface.encodeFunctionData("swapExactETHForTokens", [
-            amountOutMinWei,
+            amountOutWei,
             path,
             to,
             deadlineTimestamp
@@ -484,7 +565,7 @@ export class SwapService {
           // token -> ETH
           swapData = iface.encodeFunctionData("swapExactTokensForETH", [
             amountInWei,
-            amountOutMinWei,
+            amountOutWei,
             path,
             to,
             deadlineTimestamp
@@ -493,62 +574,27 @@ export class SwapService {
           // token -> token
           swapData = iface.encodeFunctionData("swapExactTokensForTokens", [
             amountInWei,
-            amountOutMinWei,
+            amountOutWei,
             path,
             to,
             deadlineTimestamp
           ]);
         }
-
-
-        const finalCallData = this.concatSelectorAndParams(ethers.getBytes(swapData), [], "permit", this.swapOptions.partnerKey);
-
-
-
-
-        tx = await this.signer.sendTransaction({
-          to: this.config.proxyAddress,
-          from: signerAddress,
-          data: hexlify(finalCallData),
-          value: fromToken.address === ethers.ZeroAddress ? amountInWei : 0n
-        });
-
-
-      } else {
-        if (fromToken.address === ethers.ZeroAddress) {
-          // Swap ETH for tokens
-          tx = await this.routerContract.swapExactETHForTokens(
-            amountOutMinWei,
-            path,
-            signerAddress,
-            deadlineTimestamp,
-            { value: amountInWei }
-          );
-        } else if (toToken.address === ethers.ZeroAddress) {
-          // Swap tokens for ETH
-          tx = await this.routerContract.swapExactTokensForETH(
-            amountInWei,
-            amountOutMinWei,
-            path,
-            signerAddress,
-            deadlineTimestamp
-          );
-        } else {
-          // Swap tokens for tokens
-          tx = await this.routerContract.swapExactTokensForTokens(
-            amountInWei,
-            amountOutMinWei,
-            path,
-            signerAddress,
-            deadlineTimestamp
-          );
-        }
       }
 
+      if (this.proxyContract) {
+        swapData = hexlify(this.concatSelectorAndParams(ethers.getBytes(swapData), [], "permit", this.swapOptions.partnerKey));
+      }
+
+      tx = await this.signer.sendTransaction({
+        to: this.config.proxyAddress || this.config.routerAddress,
+        from: signerAddress,
+        data: swapData,
+        value: fromToken.address === ethers.ZeroAddress ? amountInWei : 0n
+      });
 
 
-      const receipt = await tx.wait();
-      return receipt.hash;
+      return tx;
     } catch (error) {
       console.error('Error swapping tokens:', error);
       throw error;

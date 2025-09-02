@@ -110,6 +110,42 @@ npm install @kaspa/swap-widget
 ```
 
 
+### Headless (UI-less) usage
+
+If you prefer to build your own UI, use the headless controller. You control inputs via `setData` and subscribe to state updates via `onChange`.
+
+```javascript
+import { createKaspaComSwapController } from 'swap-widget';
+
+// 1) Create controller
+const controller = createKaspaComSwapController({
+  containerId: 'swap-widget',
+  config: 'kasplex-testnet',
+});
+
+// 2) Subscribe to changes and render your UI from state
+const unsubscribe = controller.onChange((state) => {
+  console.log('controller state', state);
+  // Render expectedAmountOut, flags.needsApproval, status, errors, etc.
+});
+
+// 3) Provide user input
+await controller.setData({
+  sellToken,
+  buyToken,
+  sellAmount: '1.0',
+  action: 'sell',
+  settings: { maxSlippage: '0.5', swapDeadline: 20 }
+});
+
+// 4) Connect, approve (if needed), and swap
+await controller.connectWallet();
+if (controller.getState().flags.needsApproval) {
+  await controller.approve();
+}
+await controller.swap();
+```
+
 ### Network Configuration
 
 The widget supports multiple networks via a configuration object or preset string.  

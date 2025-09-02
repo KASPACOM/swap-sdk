@@ -1,297 +1,461 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Swap Widget Demo</title>
+    <title>Headless Swap Controller Demo</title>
     <link rel="stylesheet" href="dist/styles/swap-widget.css">
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             margin: 0;
+            padding: 24px;
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+
+        .container {
+            max-width: 920px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: #0b1022;
+            border: 1px solid #1e293b;
+            border-radius: 16px;
             padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .row {
             display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .demo-container {
-            max-width: 800px;
-            width: 100%;
-            background: white;
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
-        }
-
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
-        .header h1 {
-            color: #333;
-            margin-bottom: 10px;
-        }
-
-        .header p {
-            color: #666;
-            margin: 0;
-        }
-
-        .controls {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 30px;
+            gap: 16px;
             flex-wrap: wrap;
-            justify-content: center;
         }
 
-        .control-group {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
+        .col {
+            flex: 1;
+            min-width: 220px;
         }
 
-        .control-group label {
-            font-weight: 600;
-            color: #333;
-            font-size: 14px;
+        label {
+            display: block;
+            font-size: 12px;
+            color: #93c5fd;
+            margin-bottom: 6px;
         }
 
-        .control-group select,
-        .control-group button {
-            padding: 10px 15px;
-            border: 2px solid #e1e5e9;
-            border-radius: 10px;
-            font-size: 14px;
-            background: white;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .control-group select:focus,
-        .control-group button:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .control-group button:hover {
-            background: #f8f9fa;
-        }
-
-        .theme-toggle {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            border: none;
-        }
-
-        .theme-toggle:hover {
-            background: linear-gradient(135deg, #5a6fd8, #6a4190);
-        }
-
-        .widget-container {
-            display: flex;
-            justify-content: center;
-            margin-top: 20px;
-        }
-
-        #swap-widget {
+        select,
+        input[type="text"],
+        input[type="number"],
+        button {
             width: 100%;
-            max-width: 400px;
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: #e2e8f0;
+            font-size: 14px;
         }
 
-        .info-panel {
-            background: #f8f9fa;
-            border-radius: 15px;
-            padding: 20px;
-            margin-top: 30px;
+        button.primary {
+            background: #3b82f6;
+            border-color: #3b82f6;
+            cursor: pointer;
         }
 
-        .info-panel h3 {
-            margin-top: 0;
-            color: #333;
+        button.secondary {
+            background: #1e293b;
+            cursor: pointer;
         }
 
-        .info-panel ul {
-            margin: 0;
-            padding-left: 20px;
-            color: #666;
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
-        .info-panel li {
-            margin-bottom: 8px;
+        .actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
         }
 
-        @media (max-width: 600px) {
-            .demo-container {
-                padding: 20px;
-                margin: 10px;
-            }
+        .status {
+            margin-top: 16px;
+            padding: 12px;
+            border-radius: 10px;
+            background: #0b1022;
+            border: 1px solid #1e293b;
+        }
 
-            .controls {
-                flex-direction: column;
-                align-items: center;
-            }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
 
-            .control-group {
-                width: 100%;
-                max-width: 200px;
-            }
+        .pill {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: #1e293b;
+            color: #93c5fd;
+            font-size: 12px;
+        }
+
+        .muted {
+            color: #94a3b8;
+            font-size: 13px;
+        }
+
+        .error {
+            color: #fecaca;
+        }
+
+        .success {
+            color: #bbf7d0;
+        }
+
+        h1 {
+            margin: 0 0 16px;
+            font-size: 22px;
+        }
+
+        h2 {
+            margin: 24px 0 10px;
+            font-size: 16px;
+            color: #93c5fd;
         }
     </style>
 </head>
+
 <body>
-    <div class="demo-container">
-        <div class="header">
-            <h1>Swap Widget Demo</h1>
-            <p>A lightweight, embeddable swap widget for DeFi applications</p>
-        </div>
+    <div class="container">
+        <div class="card">
+            <h1>Headless Swap (Custom UI)</h1>
 
-        <div class="controls">
-            <div class="control-group">
-                <label for="network-select">Network:</label>
-                <select id="network-select">
-                    <option value="kasplex-testnet">Kasplex Testnet</option>
-                </select>
+            <div class="row">
+                <div class="col">
+                    <label>Wallet</label>
+                    <div class="actions">
+                        <button id="connectBtn" class="primary">Connect</button>
+                        <button id="disconnectBtn" class="secondary">Disconnect</button>
+                    </div>
+                    <div class="muted" id="walletInfo">Not connected</div>
+                </div>
+                <div class="col">
+                    <label>Settings</label>
+                    <div class="row">
+                        <div class="col">
+                            <input type="text" id="slippageInput" placeholder="Max slippage %" value="0.5" />
+                        </div>
+                        <div class="col">
+                            <input type="text" id="deadlineInput" placeholder="Deadline (min)" value="20" />
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <div class="control-group">
-                <label for="theme-select">Theme:</label>
-                <select id="theme-select">
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
-                </select>
+            <h2>Trade</h2>
+            <div class="row">
+                <div class="col">
+                    <label>Mode</label>
+                    <select id="modeSelect">
+                        <option value="sell">Sell (enter input)</option>
+                        <option value="buy">Buy (enter target output)</option>
+                    </select>
+                </div>
+                <div class="col">
+                    <label>From token</label>
+                    <select id="sellTokenSelect"></select>
+                </div>
+                <div class="col">
+                    <label>To token</label>
+                    <select id="buyTokenSelect"></select>
+                </div>
+                <div class="col">
+                    <label id="amountLabel">Amount (sell)</label>
+                    <input type="number" id="amountInput" placeholder="0.0" />
+                </div>
             </div>
 
-            <div class="control-group">
-                <label>&nbsp;</label>
-                <button class="theme-toggle" onclick="switchTheme()">Switch Theme</button>
+            <div class="actions">
+                <div id="loadingMessage" style="display: none; text-align: center; color: #93c5fd; font-size: 14px;">
+                    Processing... Please wait
+                </div>
+                <button id="swapBtn" class="primary" disabled>Swap</button>
             </div>
 
-
-        </div>
-
-        <div class="widget-container">
-            <div id="swap-widget"></div>
-        </div>
-
-        <div class="info-panel">
-            <h3>Features</h3>
-            <ul>
-                <li>🔗 Wallet connection integration</li>
-                <li>🔄 Token swapping with Uniswap V2</li>
-                <!-- <li>⚙️ Customizable slippage and deadline</li> -->
-                <li>🎨 Light and dark themes</li>
-                <!-- <li>📱 Responsive design</li> -->
-                <li>🔧 Multiple network support</li>
-            </ul>
+            <div class="status" id="statusBox">
+                <div>
+                    <span class="pill" id="statusPill">idle</span>
+                </div>
+                <div class="grid" style="margin-top:10px">
+                    <div>
+                        <div class="muted">Required amount</div>
+                        <div id="requiredAmount">-</div>
+                    </div>
+                    <div>
+                        <div class="muted">Expected amount out</div>
+                        <div id="expectedOut">-</div>
+                    </div>
+                    <div>
+                        <div class="muted">Min amount out (after slippage)</div>
+                        <div id="minOut">-</div>
+                    </div>
+                    <div>
+                        <div class="muted">Path</div>
+                        <div id="tradePath" class="muted">-</div>
+                    </div>
+                </div>
+                <div id="errorMsg" class="error" style="margin-top:8px"></div>
+                <div id="txHash" class="success" style="margin-top:8px"></div>
+            </div>
         </div>
     </div>
 
-    <!-- Load the widget (all dependencies are bundled) -->
     <script src="dist/swap-widget.browser.js"></script>
-
     <script>
-        // Real wallet connection using window.ethereum
-        let isConnected = false;
-        let connectedAddress = null;
-
-        // Basic tokens for demo
         const startingTokens = [
-            {
-                address: '0x0000000000000000000000000000000000000000',
-                symbol: 'KAS',
-                name: 'Kaspa',
-                decimals: 18,
-            },
-            {
-                address: '0xD33d07ccfEd8038cEd1aa393FbEf7D7dA72be20e',
-                symbol: 'USDT',
-                name: 'Tether',
-                decimals: 6,
-            },
-            {
-                address: '0x5266ae5ec8040d7f92c3ddd833e74d4cf3eaf1db',
-                symbol: 'KSCM',
-                name: 'KASPACOM TEST',
-                decimals: 18,
-            },
+            { address: '0x0000000000000000000000000000000000000000', symbol: 'KAS', name: 'Kaspa', decimals: 18 },
+            { address: '0xD33d07ccfEd8038cEd1aa393FbEf7D7dA72be20e', symbol: 'USDT', name: 'Tether', decimals: 6 },
+            { address: '0x5266ae5ec8040d7f92c3ddd833e74d4cf3eaf1db', symbol: 'KSCM', name: 'KASPACOM TEST', decimals: 18 },
         ];
 
-        // Initialize widget
-        let swapWidget;
-        async function initializeWidget() {
-            const networkSelect = document.getElementById('network-select');
-            const themeSelect = document.getElementById('theme-select');
-            const selectedNetwork = networkSelect.value;
-            const selectedTheme = themeSelect.value;
+        let controller = null;
+        let currentSellToken = startingTokens[0];
+        let currentBuyToken = startingTokens[1];
+        let currentMode = 'sell';
 
-            // Destroy existing widget if it exists
-            if (swapWidget) {
-                swapWidget.destroy();
+
+        function populateTokenSelect(select, tokens) {
+            const prev = select.value;
+            select.innerHTML = '';
+            for (const t of tokens) {
+                const opt = document.createElement('option');
+                opt.value = t.address;
+                opt.textContent = t.symbol + ' - ' + t.name + ' (' + t.address + ')';
+                select.appendChild(opt);
+            }
+            if (tokens.find(t => t.address === prev)) select.value = prev;
+        }
+
+        function filterTokens(query) {
+            const q = (query || '').trim().toLowerCase();
+            if (!q) return startingTokens;
+            return startingTokens.filter(t => t.symbol.toLowerCase().includes(q) || t.name.toLowerCase().includes(q));
+        }
+
+        function getTokenByAddress(addr) {
+            return startingTokens.find(t => t.address.toLowerCase() === addr.toLowerCase());
+        }
+
+        function setStatusFromLoader(loader) {
+            const map = { 1: 'calculating', 2: 'approving', 3: 'swapping' };
+            document.getElementById('statusPill').textContent = loader ? (map[loader] || 'working') : 'idle';
+        }
+
+        function updateUIFromState(state, changes) {
+            const requiredAmount = document.getElementById('requiredAmount');
+            const expectedOut = document.getElementById('expectedOut');
+            const minOut = document.getElementById('minOut');
+            const tradePath = document.getElementById('tradePath');
+            const errorMsg = document.getElementById('errorMsg');
+            const txHash = document.getElementById('txHash');
+            const swapBtn = document.getElementById('swapBtn');
+            const loadingMessage = document.getElementById('loadingMessage');
+
+            setStatusFromLoader(state.loader);
+            
+            // Show required amount (input amount)
+            const amountInput = document.getElementById('amountInput');
+            const currentAmount = amountInput.value || '0';
+            
+            // Handle computed amounts with proper fallbacks
+            if (state.computed) {
+                expectedOut.textContent = state.computed.amountOut ? state.computed.amountOut + ' ' + currentBuyToken.symbol : '-';
+                minOut.textContent = currentMode === 'sell' ? (state.computed.minAmountOut + ' ' + currentBuyToken.symbol) : '-';
+                requiredAmount.textContent = (currentMode === 'buy' ? state.computed.maxAmountIn : state.computed.amountIn) + ' ' + currentSellToken.symbol;
+            } else {
+                expectedOut.textContent = '-';
+                minOut.textContent = '-';
+                requiredAmount.textContent = '-';
+            }
+            
+            // Try to get trade path from tradeInfo, otherwise show placeholder
+            if (state.tradeInfo && state.tradeInfo.route && state.tradeInfo.route.path) {
+                tradePath.textContent = state.tradeInfo.route.path.map(token => token.symbol).join(' → ');
+            } else {
+                tradePath.textContent = '-';
             }
 
-            // Create new widget
+            errorMsg.textContent = state.error ? ('Error: ' + state.error) : '';
+
+            if (state.txHash || state.approveTxHash) {
+                if (!state.txHash) {
+                    txHash.textContent = 'Approve Tx: ' + state.approveTxHash;
+                } else {
+                    txHash.textContent = 'Swap Tx: ' + state.txHash;  
+                }
+            } else {
+                txHash.textContent = '';
+            }
+
+            const isConnected = document.getElementById('walletInfo').textContent.startsWith('Connected:');
+            const amount = document.getElementById('amountInput').value;
+            const hasAmount = amount && Number(amount) > 0;
+            const isBusy = !!state.loader;
+
+            // Hide swap button when loading
+            if (isBusy) {
+                swapBtn.style.display = 'none';
+                loadingMessage.style.display = 'block';
+                
+                // Show specific loading message based on loader status
+                const loaderMessages = {
+                    1: 'Calculating quote...',
+                    2: 'Approving tokens...',
+                    3: 'Processing swap...'
+                };
+                loadingMessage.textContent = loaderMessages[state.loader] || 'Processing... Please wait';
+            } else {
+                swapBtn.style.display = 'block';
+                loadingMessage.style.display = 'none';
+                
+                // Enable swap when connected, has amount, and not busy
+                const readyToSwap = isConnected && hasAmount && !!(state.computed?.amountOut);
+                swapBtn.disabled = !readyToSwap;
+            }
+        }
+
+        let setDataTimer = null;
+        function scheduleSetData() {
+            if (!controller) return;
+            if (setDataTimer) clearTimeout(setDataTimer);
+            setDataTimer = setTimeout(async () => {
+                const amount = document.getElementById('amountInput').value || '0';
+                const slippage = document.getElementById('slippageInput').value || '0.5';
+                const deadline = document.getElementById('deadlineInput').value || '20';
+                await controller.setData({
+                    fromToken: currentSellToken,
+                    toToken: currentBuyToken,
+                    amount: Number(amount || '0'),
+                    isOutputAmount: currentMode === 'buy',
+                    settings: { maxSlippage: slippage, swapDeadline: Number(deadline) }
+                });
+            }, 250);
+        }
+
+        async function init() {
             if (!window.SwapWidget) {
-                console.error('SwapWidget not found. Make sure the browser bundle is loaded correctly.');
+                alert('Bundle not loaded');
                 return;
             }
 
-            // Get wallet provider (MetaMask in this example)
-            // const walletProvider = window.kasware.ethereum;
-            
-            swapWidget = await window.SwapWidget.createSwapWidget({
-                containerId: 'swap-widget',
-                theme: selectedTheme,
-                config: 'kasplex-testnet',
-                // walletProvider: walletProvider, // Pass the wallet provider
-                onConnectWallet: function(walletAddress) {
-                    console.log('Wallet connected:', walletAddress);
-                },
-                onDisconnectWallet: () => console.log('wallet disconnected'),
-                initialTokens: startingTokens,
-                onSwapSuccess: async (hash) => {
-                    console.log('Swap sucess:', hash);
-                    alert('Swap sucess:' + hash)
-                },
-                onErrorEvent: async (error) => {
-                    alert('Error: ' + (error?.message || error));
-                },
-                partnerKey: '0x47696c6164000000000000000000000000000000000000000000000000000000',
+            if (typeof window !== 'undefined' && !window.ethereum) {
+                alert('No wallet found')
+                return;
+            }
+
+
+            controller = window.SwapWidget.createKaspaComSwapController({
+                networkConfig: 'kasplex-testnet',
+                onChange: updateUIFromState,
+                walletProvider: window.ethereum,
             });
+
+            // Listen for account changes
+            window.ethereum.on('accountsChanged', (accounts) => {
+                controller.disconnectWallet();
+            });
+
+            // Listen for chain changes
+            window.ethereum.on('chainChanged', (chainId) => {
+                controller.disconnectWallet();
+            });
+
+            // Listen for disconnect
+            window.ethereum.on('disconnect', () => {
+                controller.disconnectWallet();
+            });
+
+            // Populate selects
+            const sellSel = document.getElementById('sellTokenSelect');
+            const buySel = document.getElementById('buyTokenSelect');
+            const modeSel = document.getElementById('modeSelect');
+            const amountInput = document.getElementById('amountInput');
+            const amountLabel = document.getElementById('amountLabel');
+
+            populateTokenSelect(sellSel, startingTokens);
+            populateTokenSelect(buySel, startingTokens);
+            sellSel.value = currentSellToken.address;
+            buySel.value = currentBuyToken.address;
+
+            modeSel.addEventListener('change', () => {
+                currentMode = modeSel.value;
+                amountLabel.textContent = currentMode === 'sell' ? 'Amount (sell)' : 'Amount (target buy)';
+                scheduleSetData();
+            });
+
+            sellSel.addEventListener('change', () => {
+                currentSellToken = getTokenByAddress(sellSel.value);
+                if (currentSellToken.address === currentBuyToken.address) {
+                    currentBuyToken = startingTokens.find(t => t.address !== currentSellToken.address) || currentBuyToken;
+                    buySel.value = currentBuyToken.address;
+                }
+                scheduleSetData();
+            });
+            buySel.addEventListener('change', () => {
+                currentBuyToken = getTokenByAddress(buySel.value);
+                if (currentBuyToken.address === currentSellToken.address) {
+                    currentSellToken = startingTokens.find(t => t.address !== currentBuyToken.address) || currentSellToken;
+                    sellSel.value = currentSellToken.address;
+                }
+                scheduleSetData();
+            });
+
+            amountInput.addEventListener('input', scheduleSetData);
+            document.getElementById('slippageInput').addEventListener('input', scheduleSetData);
+            document.getElementById('deadlineInput').addEventListener('input', scheduleSetData);
+
+            document.getElementById('connectBtn').addEventListener('click', async () => {
+                try {
+                    const addr = await controller.connectWallet();
+                    document.getElementById('walletInfo').textContent = 'Connected: ' + addr;
+                    scheduleSetData();
+                } catch (e) {
+                    alert(e?.message || e);
+                }
+            });
+            document.getElementById('disconnectBtn').addEventListener('click', () => {
+                controller.disconnectWallet();
+                document.getElementById('walletInfo').textContent = 'Not connected';
+                scheduleSetData();
+            });
+
+            document.getElementById('swapBtn').addEventListener('click', async () => {
+                try {                    
+                    const tx = await controller.swap();
+                    console.log('Swapped, tx:', tx);
+                    alert('Successfully Swapped')
+                } catch (e) {
+                    console.error(e);
+                    alert(e?.message || e);
+                }
+            });
+
+            // initial compute
+            scheduleSetData();
             
+            // Initially hide swap button and show loading message
+            document.getElementById('swapBtn').style.display = 'none';
+            document.getElementById('loadingMessage').style.display = 'block';
+            document.getElementById('loadingMessage').textContent = 'Connecting to network...';
         }
 
-        // Theme switching function
-        function switchTheme() {
-            const themeSelect = document.getElementById('theme-select');
-            const currentTheme = themeSelect.value;
-            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-            themeSelect.value = newTheme;
-            
-            // Update body class for global theme
-            document.body.classList.toggle('dark-theme', newTheme === 'dark');
-            
-            // Reinitialize widget with new theme
-            initializeWidget();
-        }
-
-        // Event listeners
-        document.getElementById('network-select').addEventListener('change', initializeWidget);
-        document.getElementById('theme-select').addEventListener('change', initializeWidget);
-
-        // Initialize on load
-        document.addEventListener('DOMContentLoaded', () => {
-            initializeWidget();
-        });
-
-        // Make switchTheme available globally
-        window.switchTheme = switchTheme;
-
-
+        document.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
-</html> 
+
+</html>

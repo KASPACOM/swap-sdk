@@ -15,12 +15,11 @@
     "clean": "if exist dist rmdir /s /q dist",
     "prebuild": "npm run clean",
     "prepublishOnly": "npm run build",
-    "build": "tsc && npm run build:browser && npm run copy:css",
+    "build": "tsc && npm run build:browser",
     "build:browser": "esbuild src/index.ts --bundle --format=iife --global-name=SwapWidget --outfile=dist/swap-widget.browser.js",
     "types": "tsc --emitDeclarationOnly",
     "test": "jest",
-    "lint": "eslint src --ext .ts,.tsx",
-    "copy:css": "mkdir dist\\styles 2>nul & copy src\\styles\\swap-widget.css dist\\styles\\swap-widget.css"
+    "lint": "eslint src --ext .ts,.tsx"
   },
   "keywords": [
     "kaspa",
