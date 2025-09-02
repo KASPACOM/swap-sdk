@@ -14,7 +14,7 @@ const DEFAULT_SETTINGS: SwapSettings = {
   swapDeadline: 20,
 }
 
-export class SwapWidgetController {
+export class SwapSdkController {
   private walletService: WalletService | undefined;
   private swapService: SwapService | undefined;
 

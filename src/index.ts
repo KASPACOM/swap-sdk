@@ -9,8 +9,8 @@ export { WalletService } from './services/wallet.service';
 export { SwapService } from './services/swap.service';
 
 // Export headless controller only
-import { SwapWidgetController } from './components/swap-widget';
-export { SwapWidgetController } from './components/swap-widget';
+import { SwapSdkController } from './controllers/swap-sdk.controller';
+export { SwapSdkController } from './controllers/swap-sdk.controller';
 
 // Main factory function for easy initialization (headless)
 import { SwapWidgetOptions } from './types';
@@ -19,7 +19,7 @@ import { NETWORKS, SwapWidgetNetworkConfig } from './types/networks';
 /**
  * Create a new headless swap controller
  * @param options Configuration options for the controller
- * @returns SwapWidgetController instance
+ * @returns SwapSdkController instance
  */
 export function createKaspaComSwapController(options: SwapWidgetOptions) {
   let resolvedOptions: SwapWidgetOptions;
@@ -31,5 +31,5 @@ export function createKaspaComSwapController(options: SwapWidgetOptions) {
     resolvedOptions = options as SwapWidgetOptions;
   }
   
-  return new SwapWidgetController(resolvedOptions);
+  return new SwapSdkController(resolvedOptions);
 } 
