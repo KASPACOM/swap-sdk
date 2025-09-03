@@ -21,7 +21,7 @@ export class WalletService {
       chainId: config.chainId,
     }, config.additionalJsonRpcApiProviderOptionsOptions);
     if (injectedProvider) {
-        this.connect(this.injectedProvider);
+      this.connect(this.injectedProvider);
 
     }
   }
@@ -76,6 +76,11 @@ export class WalletService {
                 rpcUrls: [this.config.rpcUrl],
                 blockExplorerUrls: this.config.blockExplorerUrl ? [this.config.blockExplorerUrl] : []
               }]
+            });
+
+            await this.injectedProvider.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: `0x${this.config.chainId.toString(16)}` }]
             });
           } else {
             throw new Error(`Please switch to ${this.config.name} network`);
