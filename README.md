@@ -2,6 +2,9 @@
 
 A lightweight, headless swap SDK for Kaspa DeFi powered by Uniswap V2. Build your own UI and use the SDK to handle quotes, approvals, and swaps.
 
+# Examples
+You can find some examples of how to use the SDK in the [swap-sdk-examples](https://github.com/KASPACOM/swap-sdk-examples) repository.
+
 
 ## Features
 
