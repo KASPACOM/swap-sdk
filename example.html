@@ -4,8 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Headless Swap Controller Demo</title>
-    <link rel="stylesheet" href="dist/styles/swap-widget.css">
+    <title>Swap Sdk Demo</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -215,7 +214,7 @@
         </div>
     </div>
 
-    <script src="dist/swap-widget.browser.js"></script>
+    <script src="dist/swap-sdk.js"></script>
     <script>
         const startingTokens = [
             { address: '0x0000000000000000000000000000000000000000', symbol: 'KAS', name: 'Kaspa', decimals: 18 },
@@ -359,7 +358,7 @@
         }
 
         async function init() {
-            if (!window.SwapWidget) {
+            if (!window.KaspacomSwapSdk) {
                 alert('Bundle not loaded');
                 return;
             }
@@ -370,7 +369,7 @@
             }
 
 
-            controller = window.SwapWidget.createKaspaComSwapController({
+            controller = window.KaspacomSwapSdk.createKaspaComSwapController({
                 networkConfig: 'kasplex-testnet',
                 onChange: updateUIFromState,
                 walletProvider: window.ethereum,

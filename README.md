@@ -1,233 +1,246 @@
-# Kaspa Swap Widget
+# Kaspa Swap SDK
 
-A lightweight, embeddable swap widget for Kaspa DeFi that can be easily integrated into wallets and dApps.
-
-
-**Live Demo:**  
-Try the widget in your browser:  
-[https://kaspacom.github.io/swap-widget/example.html](https://kaspacom.github.io/swap-widget/example.html)
-
+A lightweight, headless swap SDK for Kaspa DeFi powered by Uniswap V2. Build your own UI and use the SDK to handle quotes, approvals, and swaps.
 
 
 ## Features
 
 - 🔄 Token swapping with Uniswap V2 protocol
-- 💰 Support for ERC-20 tokens and native Kaspa
-- 🎨 Customizable themes (light/dark)
-- 🔌 Simple wallet integration
-- ⚡ Real-time price calculations
-- 🛡️ Slippage protection
-<!-- - 📊 Price impact display -->
+- 💰 Support for ERC-20 tokens and native Kaspa wrappers
+- 🎛️ Headless controller: bring your own UI
+- 🔌 Simple wallet integration (EIP-1193 providers)
+- ⚡ Real-time quote calculations
+- 🛡️ Slippage protection and deadlines
 
-<!-- ## Installation
+
+## Installation
 
 ```bash
-npm install @kaspa/swap-widget
-``` -->
+npm install @kaspacom/swap-sdk
+```
+
+
 
 ## Quick Start
 
-### Basic Usage
+### Create the headless controller
 
-```html
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Swap Widget Demo</title>
-    <link rel="stylesheet" href="dist/styles/swap-widget.css">
-</head>
-<body>
-    <div id="swap-widget"></div>
-    <script src="dist/swap-widget.browser.js"></script>
-    <script>
-        // Example tokens
-        const startingTokens = [
-            {
-                address: '0x0000000000000000000000000000000000000000',
-                symbol: 'KAS',
-                name: 'Kaspa',
-                decimals: 18,
-                logoURI: 'https://assets.coingecko.com/coins/images/25751/thumb/kaspa.png'
-            },
-            {
-                address: '0xD33d07ccfEd8038cEd1aa393FbEf7D7dA72be20e',
-                symbol: 'USDT',
-                name: 'Tether',
-                decimals: 6,
-                logoURI: 'https://assets.coingecko.com/coins/images/25751/thumb/kaspa.png'
-            },
-        ];
+```typescript
+import {
+  createKaspaComSwapController,
+  LoaderStatuses,
+  Erc20Token,
+} from 'swap-widget';
 
-        // Initialize widget
-        let swapWidget;
-        async function initializeWidget() {
-            if (swapWidget) {
-                swapWidget.destroy();
-            }
-            if (!window.SwapWidget) {
-                console.error('SwapWidget not found. Make sure the browser bundle is loaded correctly.');
-                return;
-            }
-            swapWidget = await window.SwapWidget.createSwapWidget({
-                containerId: 'swap-widget',
-                theme: 'light', // or 'dark'
-                // You can use a preset string (e.g. 'kasplex-testnet') or a full config object:
-                // config: 'kasplex-testnet',
-                /*
-                config: {
-                    rpcUrl: 'https://your-rpc-url.com',
-                    chainId: 12345,
-                    routerAddress: '0x...',
-                    factoryAddress: '0x...',
-                    wethAddress: '0x...',
-                    theme: 'light', // optional
-                    defaultSlippage: 0.5, // optional
-                    defaultDeadline: 20    // optional
-                },
-                */
-                config: 'kasplex-testnet',
-                // walletProvider: walletProvider, // Pass the wallet provider if needed
-                onConnectWallet: function(walletAddress) {
-                    console.log('Wallet connected:', walletAddress);
-                },
-                onDisconnectWallet: () => console.log('wallet disconnected'),
-                initialTokens: startingTokens,
-                onSwapSuccess: async (hash) => {
-                    console.log('Swap success:', hash);
-                    alert('Swap success: ' + hash);
-                },
-                onErrorEvent: async (error) => {
-                    alert('Error: ' + (error?.message || error));
-                }
-            });
-        }
-        document.addEventListener('DOMContentLoaded', () => {
-            initializeWidget();
-        });
-    </script>
-</body>
-</html>
-```
-
-
-### Headless (UI-less) usage
-
-If you prefer to build your own UI, use the headless controller. You control inputs via `setData` and subscribe to state updates via `onChange`.
-
-```javascript
-import { createKaspaComSwapController } from 'swap-widget';
-
-// 1) Create controller
 const controller = createKaspaComSwapController({
-  containerId: 'swap-widget',
-  config: 'kasplex-testnet',
+  networkConfig: 'kasplex-testnet',
+  walletProvider: window.ethereum, // any EIP-1193 provider
+  onChange: async (state, patch) => {
+    console.log('state changed', patch, state);
+    // Render your UI from state.computed, state.tradeInfo, state.loader, etc.
+  },
 });
-
-// 2) Subscribe to changes and render your UI from state
-const unsubscribe = controller.onChange((state) => {
-  console.log('controller state', state);
-  // Render expectedAmountOut, flags.needsApproval, status, errors, etc.
-});
-
-// 3) Provide user input
-await controller.setData({
-  sellToken,
-  buyToken,
-  sellAmount: '1.0',
-  action: 'sell',
-  settings: { maxSlippage: '0.5', swapDeadline: 20 }
-});
-
-// 4) Connect, approve (if needed), and swap
-await controller.connectWallet();
-if (controller.getState().flags.needsApproval) {
-  await controller.approve();
-}
-await controller.swap();
 ```
 
-### Network Configuration
+### Provide inputs and get a quote
 
-The widget supports multiple networks via a configuration object or preset string.  
-You can use a built-in preset (e.g. `'kasplex-testnet'`) or provide a custom config.
+```typescript
+const kas: Erc20Token = {
+  address: '0x0000000000000000000000000000000000000000',
+  symbol: 'KAS',
+  name: 'Kaspa',
+  decimals: 18,
+};
 
-**Preset options and structure are defined in [`src/types/networks.ts`](src/types/networks.ts).**
+const usdt: Erc20Token = {
+  address: '0xD33d07ccfEd8038cEd1aa393FbEf7D7dA72be20e',
+  symbol: 'USDT',
+  name: 'Tether',
+  decimals: 6,
+};
+
+await controller.setData({
+  fromToken: kas,
+  toToken: usdt,
+  amount: 1.0,             // user-entered number
+  isOutputAmount: false,    // false = amount is input; true = amount is desired output (How much the user will receive)
+  settings: { maxSlippage: '0.5', swapDeadline: 20 },
+});
+
+// Quote results are in controller.getState().computed
+const { computed } = controller.getState();
+console.log('computed amounts', computed);
+```
+
+### Connect wallet, approve if needed, and swap
+
+```typescript
+await controller.connectWallet();
+
+// Optional: call approve explicitly
+await controller.approveIfNeeded();
+
+// Perform the swap
+const txHash = await controller.swap();
+console.log('Swap TX hash:', txHash);
+```
+
+### Load tokens from the subgraph (for token pickers)
+
+```typescript
+const tokens = await controller.getTokensFromGraph(100, 'kas');
+console.log(tokens);
+```
 
 
 ## API Reference
 
-### Methods
+### createKaspaComSwapController(options)
+Creates and returns a `SwapSdkController` instance. Accepts either a preset string for `networkConfig` or a full `SwapSdkNetworkConfig` object.
 
-#### `SwapWidget.destroy()`
-Clean up the widget and remove event listeners.
+- **options.networkConfig**: `'kasplex-testnet'` or `SwapSdkNetworkConfig`
+- **options.walletProvider**: EIP-1193 provider (e.g., `window.ethereum`)
+- **options.partnerKey?**: Optional partner key string
+- **options.onChange?**: `(state, patch) => Promise<void>` callback invoked on any state change
 
-```javascript
-widget.destroy();
-```
+Returns: `SwapSdkController`
 
 
-## Styling
+### class SwapSdkController
 
-The widget comes with built-in CSS that can be customized using CSS variables:
+- **constructor(options: SwapSdkOptions)**: Normally use the factory `createKaspaComSwapController`.
+- **connectWallet(injectedProvider?: Eip1193Provider): Promise<string>**
+  - Connects the wallet and sets signer on the swap service.
+  - Returns the connected address.
+- **disconnectWallet(): void**
+  - Disconnects the wallet and clears signer.
+- **getState(): SwapControllerOutput**
+  - Returns the current controller state.
+- **setData(input: Partial<SwapControllerInput>): Promise<SwapControllerOutput>**
+  - Merges provided input, triggers a quote calculation if possible, and returns updated state.
+- **calculateQuoteIfNeeded(): Promise<void>**
+  - Re-calculates quote if `fromToken`, `toToken`, and `amount` are valid.
+- **approveIfNeeded(): Promise<string | undefined>**
+  - If allowance is insufficient, submits approval transaction and waits for confirmation.
+  - Returns approval transaction hash when submitted, otherwise `undefined` if already approved.
+- **swap(): Promise<string>**
+  - Executes the swap using last computed trade info and amounts. Returns swap transaction hash.
+- **getPartnerFee(): Promise<number>**
+  - Fetches the current partner fee in percentage (bps/divisor).
+- **getTokensFromGraph(limit?: number, search?: string): Promise<any[]>**
+  - Queries the subgraph for tokens. Use for token lists/search.
 
-```css
-.swap-widget {
-    --swap-bg: #ffffff;
-    --swap-border: #e1e5e9;
-    --swap-text: #1a1a1a;
-    --swap-primary: #3b82f6;
-    --swap-secondary: #f3f4f6;
-    --swap-success: #10b981;
-    --swap-error: #ef4444;
-}
-```
 
-## Browser Support
+## Types
 
-- Chrome 88+
-- Firefox 85+
-- Safari 14+
-- Edge 88+
+All types are exported from `swap-widget`.
+
+- **Erc20Token**
+  - `address: string`
+  - `symbol: string`
+  - `name: string`
+  - `decimals: number`
+
+- **SwapSettings**
+  - `maxSlippage: string` (e.g., `'0.5'` for 0.5%)
+  - `swapDeadline: number` (minutes)
+
+- **SwapSdkOptions**
+  - `networkConfig: SwapSdkNetworkConfig | string`
+  - `walletProvider: any` (EIP-1193)
+  - `partnerKey?: string`
+  - `onChange?: (state: SwapControllerOutput, patch: Partial<SwapControllerOutput>) => Promise<void>`
+
+- **SwapControllerInput** (used with `setData`)
+  - `fromToken?: Erc20Token | null`
+  - `toToken?: Erc20Token | null`
+  - `amount?: number` (user-entered number)
+  - `isOutputAmount?: boolean` (false = `amount` is input; true = `amount` is desired output)
+  - `settings?: Partial<SwapSettings>`
+
+- **LoaderStatuses**
+  - `CALCULATING_QUOTE = 1`
+  - `APPROVING = 2`
+  - `SWAPPING = 3`
+
+- **ComputedAmounts** (found in `SwapControllerOutput.computed`)
+
+  - `amountIn: string`  
+    The input amount as entered by the user, formatted for display.
+
+  - `amountOut: string`  
+    The output amount as calculated for the user, formatted for display.
+
+  - `amountInRaw: string`  
+    The exact input amount (in smallest token units, e.g. wei) that will be sent to the swap contract.
+
+  - `amountOutRaw: string`  
+    The exact output amount (in smallest token units, e.g. wei) that will be received from the swap contract.
+
+  - `maxAmountIn?: string`  
+    (Optional) The maximum input amount the user need to send to receive the desired output amount. Only present if `isOutputAmount` is `true`.
+
+  - `minAmountOut?: string`  
+    (Optional) The minimum output amount the user will receive, accounting for slippage.  Only present if `isOutputAmount` is `false`.
+
+  - `maxAmountInRaw?: string`  
+    (Optional) The raw (smallest units) value of `maxAmountIn`.
+
+  - `minAmountOutRaw?: string`  
+    (Optional) The raw (smallest units) value of `minAmountOut`.
+
+- **SwapControllerOutput**
+  - `error?: string`
+  - `txHash?: string` (Swap tx hash)
+  - `approveTxHash?: string` (Approval transaction tx hash)
+  - `tradeInfo?: Trade<Currency, Currency, TradeType>` (Uniswap V2 trade)
+  - `computed?: ComputedAmounts`
+  - `loader: LoaderStatuses | null`
+
+- **SwapSdkNetworkConfig** (also see presets in `NETWORKS`)
+  - `name: string`
+  - `chainId: number`
+  - `rpcUrl: string`
+  - `routerAddress: string`
+  - `factoryAddress: string`
+  - `proxyAddress?: string`
+  - `wethAddress: string`
+  - `graphEndpoint: string`
+  - `blockExplorerUrl?: string`
+  - `additionalJsonRpcApiProviderOptionsOptions?: any`
+
+- **NETWORKS**
+  - Preset map of network keys to `SwapSdkNetworkConfig` objects. Includes `'kasplex-testnet'`.
+
+
+## Usage Patterns
+
+- **Exact input vs exact output**
+  - Set `isOutputAmount` to `false` to quote "sell X get best Y".
+  - Set `isOutputAmount` to `true` to quote "get exactly X spend up to Y".
+- **React integration**
+  - Call `setData` on input changes; render from `controller.getState()`.
+  - Use `state.loader` to show spinners: `LoaderStatuses.CALCULATING_QUOTE`, `APPROVING`, `SWAPPING`.
+  
 
 ## Development
 
-### Building from source
-
 ```bash
-git clone https://github.com/kaspanet/swap-widget.git
+git clone https://github.com/kaspacom/swap-widget.git
 cd swap-widget
 npm install
 npm run build
 ```
 
 
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see `LICENSE`.
+
 
 ## Support
 
-If you have any questions or need help integrating the swap widget, please:
-
 - Open an issue on GitHub
-- Check the documentation
-- Join our [Telegram](https://t.me/KaspaComOfficial)
-
-## Changelog
-
-### v1.0.0
-- Initial release
-- Basic swap functionality
-- Wallet integration support
-- Light/dark themes
-- Responsive design 
+- Join our Telegram: https://t.me/KaspaComOfficial
 
 

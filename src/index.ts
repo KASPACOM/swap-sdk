@@ -1,6 +1,3 @@
-// IMPORTANT: Please include the CSS file manually in your HTML or app:
-// <link rel="stylesheet" href="dist/styles/swap-widget.css">
-
 // Export types
 export * from './types';
 
@@ -13,7 +10,7 @@ import { SwapSdkController } from './controllers/swap-sdk.controller';
 export { SwapSdkController } from './controllers/swap-sdk.controller';
 
 // Main factory function for easy initialization (headless)
-import { SwapWidgetOptions } from './types';
+import { SwapSdkOptions } from './types';
 import { NETWORKS } from './types/networks';
 
 /**
@@ -21,14 +18,14 @@ import { NETWORKS } from './types/networks';
  * @param options Configuration options for the controller
  * @returns SwapSdkController instance
  */
-export function createKaspaComSwapController(options: SwapWidgetOptions): SwapSdkController {
-  let resolvedOptions: SwapWidgetOptions;
+export function createKaspaComSwapController(options: SwapSdkOptions): SwapSdkController {
+  let resolvedOptions: SwapSdkOptions;
   if ('networkConfig' in options && typeof options.networkConfig === 'string') {
     const networkConfig = NETWORKS[options.networkConfig];
     if (!networkConfig) throw new Error(`Unknown network key: ${options.networkConfig}`);
     resolvedOptions = { ...options, networkConfig };
   } else {
-    resolvedOptions = options as SwapWidgetOptions;
+    resolvedOptions = options as SwapSdkOptions;
   }
   
   return new SwapSdkController(resolvedOptions);

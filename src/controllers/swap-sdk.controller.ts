@@ -1,13 +1,14 @@
 import { WalletService } from '../services/wallet.service';
 import { PARTNER_FEE_BPS_DIVISOR, SwapService } from '../services/swap.service';
 import {
-  SwapWidgetOptions,
+  SwapSdkOptions,
   SwapSettings,
   SwapControllerOutput,
   SwapControllerInput,
   LoaderStatuses,
 } from '../types';
-import { SwapWidgetNetworkConfig } from '../types/networks';
+import { SwapSdkNetworkConfig } from '../types/networks';
+import { Eip1193Provider } from 'ethers';
 
 const DEFAULT_SETTINGS: SwapSettings = {
   maxSlippage: '0.5',
@@ -34,28 +35,28 @@ export class SwapSdkController {
 
 
 
-  private options: SwapWidgetOptions;
+  private options: SwapSdkOptions;
 
-  constructor(options: SwapWidgetOptions) {
+  constructor(options: SwapSdkOptions) {
     this.options = options;
 
     this.initServices();
   }
 
-  initServices(): void {
+  private initServices(): void {
     this.walletService = new WalletService(
-      (this.options.networkConfig as SwapWidgetNetworkConfig),
+      (this.options.networkConfig as SwapSdkNetworkConfig),
       this.options.walletProvider
     );
 
     this.swapService = new SwapService(
       this.walletService.getProvider()!,
-      (this.options.networkConfig as SwapWidgetNetworkConfig),
+      (this.options.networkConfig as SwapSdkNetworkConfig),
       this.options,
     );
   }
 
-  private async setChange(patch: Partial<SwapControllerOutput>): void {
+  private async setChange(patch: Partial<SwapControllerOutput>): Promise<void> {
     const next: SwapControllerOutput = {
       ...this.state,
       ...patch,
@@ -66,8 +67,8 @@ export class SwapSdkController {
     }
   }
 
-  async connectWallet(): Promise<string> {
-    const address = await this.walletService!.connect();
+  async connectWallet(injectedProvider?: Eip1193Provider): Promise<string> {
+    const address = await this.walletService!.connect(injectedProvider);
     const signer = this.walletService!.getSigner();
     if (signer) this.swapService!.setSigner(signer);
     return address;

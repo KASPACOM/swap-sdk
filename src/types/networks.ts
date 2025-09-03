@@ -1,4 +1,4 @@
-export interface SwapWidgetNetworkConfig {
+export interface SwapSdkNetworkConfig {
   name: string;
   chainId: number;
   rpcUrl: string;
@@ -7,14 +7,11 @@ export interface SwapWidgetNetworkConfig {
   proxyAddress?: string;
   wethAddress: string;
   graphEndpoint: string;
-  theme?: 'light' | 'dark';
-  defaultSlippage?: number;
-  defaultDeadline?: number;
   blockExplorerUrl?: string;
   additionalJsonRpcApiProviderOptionsOptions?: any;
 }
 
-export const NETWORKS: Record<string, SwapWidgetNetworkConfig> = {
+export const NETWORKS: Record<string, SwapSdkNetworkConfig> = {
   'kasplex-testnet': {
     name: 'Kasplex Test',
     chainId: 167012,
@@ -25,8 +22,6 @@ export const NETWORKS: Record<string, SwapWidgetNetworkConfig> = {
     wethAddress: '0x654A3287c317D4Fc6e8482FeF523Dc4572b563AA',
     graphEndpoint: 'https://dev-graph-kasplex.kaspa.com/subgraphs/name/uniswap-v2',
     blockExplorerUrl: 'https://explorer.testnet.kasplextest.xyz',
-    defaultSlippage: 0.5,
-    defaultDeadline: 20,
     additionalJsonRpcApiProviderOptionsOptions: {
       batchMaxCount: 1,
       batchMaxSize: 1,
