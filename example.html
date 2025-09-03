@@ -256,7 +256,13 @@
             document.getElementById('statusPill').textContent = loader ? (map[loader] || 'working') : 'idle';
         }
 
-        function updateUIFromState(state, changes) {
+        function disconnectWallet(controller) {
+            controller.disconnectWallet();
+            document.getElementById('walletInfo').textContent = 'Not connected';
+            scheduleSetData();
+        }
+
+        async function updateUIFromState(state, changes) {
             const requiredAmount = document.getElementById('requiredAmount');
             const expectedOut = document.getElementById('expectedOut');
             const minOut = document.getElementById('minOut');
@@ -267,11 +273,11 @@
             const loadingMessage = document.getElementById('loadingMessage');
 
             setStatusFromLoader(state.loader);
-            
+
             // Show required amount (input amount)
             const amountInput = document.getElementById('amountInput');
             const currentAmount = amountInput.value || '0';
-            
+
             // Handle computed amounts with proper fallbacks
             if (state.computed) {
                 expectedOut.textContent = state.computed.amountOut ? state.computed.amountOut + ' ' + currentBuyToken.symbol : '-';
@@ -282,7 +288,7 @@
                 minOut.textContent = '-';
                 requiredAmount.textContent = '-';
             }
-            
+
             // Try to get trade path from tradeInfo, otherwise show placeholder
             if (state.tradeInfo && state.tradeInfo.route && state.tradeInfo.route.path) {
                 tradePath.textContent = state.tradeInfo.route.path.map(token => token.symbol).join(' → ');
@@ -296,7 +302,7 @@
                 if (!state.txHash) {
                     txHash.textContent = 'Approve Tx: ' + state.approveTxHash;
                 } else {
-                    txHash.textContent = 'Swap Tx: ' + state.txHash;  
+                    txHash.textContent = 'Swap Tx: ' + state.txHash;
                 }
             } else {
                 txHash.textContent = '';
@@ -311,7 +317,7 @@
             if (isBusy) {
                 swapBtn.style.display = 'none';
                 loadingMessage.style.display = 'block';
-                
+
                 // Show specific loading message based on loader status
                 const loaderMessages = {
                     1: 'Calculating quote...',
@@ -319,10 +325,15 @@
                     3: 'Processing swap...'
                 };
                 loadingMessage.textContent = loaderMessages[state.loader] || 'Processing... Please wait';
+
+                // Need this to refresh the ui
+                await new Promise(resolve => setTimeout(requestAnimationFrame(resolve), 0));
+                await new Promise(resolve => setTimeout(requestAnimationFrame(resolve), 0));
+                
             } else {
                 swapBtn.style.display = 'block';
                 loadingMessage.style.display = 'none';
-                
+
                 // Enable swap when connected, has amount, and not busy
                 const readyToSwap = isConnected && hasAmount && !!(state.computed?.amountOut);
                 swapBtn.disabled = !readyToSwap;
@@ -367,17 +378,18 @@
 
             // Listen for account changes
             window.ethereum.on('accountsChanged', (accounts) => {
-                controller.disconnectWallet();
+                console.log('accounts changed', accounts);
+                disconnectWallet(controller);
             });
 
             // Listen for chain changes
             window.ethereum.on('chainChanged', (chainId) => {
-                controller.disconnectWallet();
+                disconnectWallet(controller);
             });
 
             // Listen for disconnect
             window.ethereum.on('disconnect', () => {
-                controller.disconnectWallet();
+                disconnectWallet(controller);
             });
 
             // Populate selects
@@ -429,13 +441,11 @@
                 }
             });
             document.getElementById('disconnectBtn').addEventListener('click', () => {
-                controller.disconnectWallet();
-                document.getElementById('walletInfo').textContent = 'Not connected';
-                scheduleSetData();
+                disconnectWallet(controller);
             });
 
             document.getElementById('swapBtn').addEventListener('click', async () => {
-                try {                    
+                try {
                     const tx = await controller.swap();
                     console.log('Swapped, tx:', tx);
                     alert('Successfully Swapped')
@@ -447,11 +457,11 @@
 
             // initial compute
             scheduleSetData();
-            
+
             // Initially hide swap button and show loading message
             document.getElementById('swapBtn').style.display = 'none';
             document.getElementById('loadingMessage').style.display = 'block';
-            document.getElementById('loadingMessage').textContent = 'Connecting to network...';
+            document.getElementById('loadingMessage').textContent = 'Please enter amount to start swapping.';
         }
 
         document.addEventListener('DOMContentLoaded', init);

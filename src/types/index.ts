@@ -40,7 +40,7 @@ export interface SwapWidgetOptions {
   networkConfig: SwapWidgetNetworkConfig | string;
   walletProvider: any; // Custom wallet provider (e.g., MetaMask, WalletConnect, etc.)
   partnerKey?: string;
-  onChange?: (state: SwapControllerOutput, patch: Partial<SwapControllerOutput>) => void;
+  onChange?: (state: SwapControllerOutput, patch: Partial<SwapControllerOutput>) => Promise<void>;
 }
 
 

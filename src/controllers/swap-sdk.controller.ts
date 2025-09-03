@@ -55,14 +55,14 @@ export class SwapSdkController {
     );
   }
 
-  private setChange(patch: Partial<SwapControllerOutput>): void {
+  private async setChange(patch: Partial<SwapControllerOutput>): void {
     const next: SwapControllerOutput = {
       ...this.state,
       ...patch,
     };
     this.state = next;
     if (typeof this.options.onChange === 'function') {
-      this.options.onChange(next, patch);
+      await this.options.onChange(next, patch);
     }
   }
 
@@ -97,8 +97,7 @@ export class SwapSdkController {
     }
 
     // Set loader to calculating
-    this.setChange({ loader: LoaderStatuses.CALCULATING_QUOTE, error: undefined });
-
+    await this.setChange({ loader: LoaderStatuses.CALCULATING_QUOTE, error: undefined });
 
     try {
       // Use the calculateTrade method which returns both trade and computed amounts
@@ -110,17 +109,17 @@ export class SwapSdkController {
         this.settings.maxSlippage
       );
 
-      this.setChange({
+      await this.setChange({
         computed: tradeResult.computed,
         tradeInfo: tradeResult.trade,
         loader: null,
       });
     } catch (error: any) {
-      this.setChange({ error: error?.message || String(error), loader: null });
+      await this.setChange({ error: error?.message || String(error), loader: null });
     }
   }
 
-  async setData(input: Partial<SwapControllerInput>): Promise<void> {
+  async setData(input: Partial<SwapControllerInput>): Promise<SwapControllerOutput> {
     // Merge input and settings
     this.input = {
       ...this.input,
@@ -128,6 +127,8 @@ export class SwapSdkController {
     };
 
     await this.calculateQuoteIfNeeded();
+
+    return this.getState();
   }
 
   async approveIfNeeded(): Promise<string | undefined> {
@@ -135,7 +136,7 @@ export class SwapSdkController {
     const { fromToken, amount } = this.input;
     if (!fromToken || amount === undefined || !this.state.computed?.amountInRaw) throw new Error('fromToken or amount missing');
 
-    this.setChange({ loader: LoaderStatuses.APPROVING });
+    await this.setChange({ loader: LoaderStatuses.APPROVING });
 
     try {
       const tx = await this.swapService?.approveIfNeedApproval(
@@ -146,7 +147,7 @@ export class SwapSdkController {
       let receipt;
 
       if (tx) {
-        this.setChange({ approveTxHash: tx.hash });
+        await this.setChange({ approveTxHash: tx.hash });
         receipt = await tx.wait();
 
         if (!receipt) {
@@ -160,24 +161,23 @@ export class SwapSdkController {
 
       return receipt?.hash;
     } catch (error: any) {
-      this.setChange({ error: error?.message || String(error), loader: null });
+      await this.setChange({ error: error?.message || String(error), loader: null });
       throw error;
     }
   }
 
   async swap(): Promise<string> {
     try {
-
-      this.setChange({
+      await this.setChange({
         txHash: undefined,
         approveTxHash: undefined,
       })
-      const { fromToken, toToken, amount, isOutputAmount } = this.input;
+      const { fromToken, toToken, amount } = this.input;
       if (!fromToken || !toToken || amount === undefined) throw new Error('Tokens or amount not set');
 
       await this.approveIfNeeded();
 
-      this.setChange({ loader: LoaderStatuses.SWAPPING });
+      await this.setChange({ loader: LoaderStatuses.SWAPPING });
 
       // Get the trade path from the tradeInfo
       const trade = this.state.tradeInfo;
@@ -202,7 +202,7 @@ export class SwapSdkController {
       );
 
 
-      this.setChange({ txHash: transaction.hash });
+      await this.setChange({ txHash: transaction.hash });
 
       const receipt = await transaction.wait();
 
@@ -214,18 +214,27 @@ export class SwapSdkController {
         throw new Error("Transaction Rejected");
       }
 
-      this.setChange({
+      await this.setChange({
         loader: null,
       });
 
       return receipt.hash;
     } catch (error: any) {
-      this.setChange({ error: error?.message || String(error), loader: null });
+      await this.setChange({ error: error?.message || String(error), loader: null });
       throw error;
     }
   }
 
   async getPartnerFee(): Promise<number> {
     return Number(await this.swapService!.loadPartnerFee()) / Number(PARTNER_FEE_BPS_DIVISOR);
+  }
+
+
+  async getTokensFromGraph(limit: number = 100, search?: string) {
+    if (!this.swapService) {
+      throw new Error('Swap Service not exists');
+    }
+
+    return await this.swapService.getTokensFromGraph(limit, search);
   }
 } 

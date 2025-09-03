@@ -85,7 +85,7 @@ export class SwapService {
     this.partnerFeeLoadedPromise = new Promise((resolve) => {
       this.resolvePartnerFeeLoaded = resolve;
     });
-    this.loadAllPairsFromGraph(config.graphEndpoint);
+    this.loadAllPairsFromGraph();
     this.loadPartnerFee();
   }
 
@@ -138,7 +138,7 @@ export class SwapService {
    * Loads all pairs from The Graph and caches them as Uniswap SDK Pair instances.
    * @param graphEndpoint The GraphQL endpoint URL
    */
-  public async loadAllPairsFromGraph(graphEndpoint: string): Promise<void> {
+  public async loadAllPairsFromGraph(): Promise<void> {
     // Query for pairs with token info and reserves
     const query = `{
       pairs(first: 1000) {
@@ -150,7 +150,7 @@ export class SwapService {
       }
     }`;
     try {
-      const response = await fetch(graphEndpoint, {
+      const response = await fetch(this.config.graphEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query })
@@ -340,10 +340,10 @@ export class SwapService {
 
   private trimTrailingZeros(value: string): string {
     if (!value.includes('.')) return value; // no decimals
-  
+
     // Remove trailing zeros after decimal
     value = value.replace(/\.?0+$/, '');
-  
+
     return value;
   }
 
@@ -381,7 +381,7 @@ export class SwapService {
         // For Exact receice - Add partner fee to the final result
         const numerator = sellAmountWei * PARTNER_FEE_BPS_DIVISOR;
         const denominator = PARTNER_FEE_BPS_DIVISOR - this.partnerFee;
-      
+
         // Use ceiling division to avoid rounding down
         sellAmountWei = (numerator + denominator - 1n) / denominator;
       }
@@ -694,9 +694,10 @@ export class SwapService {
    * @param graphEndpoint The GraphQL endpoint URL
    * @param search Optional search string for symbol or name
    */
-  async getTokensFromGraph(graphEndpoint: string, search?: string): Promise<Erc20Token[]> {
+  async getTokensFromGraph(limit: number = 100, search?: string): Promise<Erc20Token[]> {
+    const finalLimit = Math.min(limit, 1000); 
     const query = `{
-      tokens(first: 100, where: {
+      tokens(first: ${finalLimit}, where: {
         ${search ? `or: [
           { symbol_contains_nocase: \"${search}\" }
           { name_contains_nocase: \"${search}\" }
@@ -709,7 +710,7 @@ export class SwapService {
       }
     }`;
     try {
-      const response = await fetch(graphEndpoint, {
+      const response = await fetch(this.config.graphEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query })

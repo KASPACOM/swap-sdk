@@ -14,14 +14,14 @@ export { SwapSdkController } from './controllers/swap-sdk.controller';
 
 // Main factory function for easy initialization (headless)
 import { SwapWidgetOptions } from './types';
-import { NETWORKS, SwapWidgetNetworkConfig } from './types/networks';
+import { NETWORKS } from './types/networks';
 
 /**
  * Create a new headless swap controller
  * @param options Configuration options for the controller
  * @returns SwapSdkController instance
  */
-export function createKaspaComSwapController(options: SwapWidgetOptions) {
+export function createKaspaComSwapController(options: SwapWidgetOptions): SwapSdkController {
   let resolvedOptions: SwapWidgetOptions;
   if ('networkConfig' in options && typeof options.networkConfig === 'string') {
     const networkConfig = NETWORKS[options.networkConfig];
