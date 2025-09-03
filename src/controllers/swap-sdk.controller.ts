@@ -238,4 +238,8 @@ export class SwapSdkController {
 
     return await this.swapService.getTokensFromGraph(limit, search);
   }
+
+  get currentNetworkConfig(): SwapSdkNetworkConfig  {
+    return this.options.networkConfig as SwapSdkNetworkConfig;
+  }
 } 
