@@ -12,6 +12,7 @@ export { SwapSdkController } from './controllers/swap-sdk.controller';
 // Main factory function for easy initialization (headless)
 import { SwapSdkOptions } from './types';
 import { NETWORKS } from './types/networks';
+export { NETWORKS} from './types/networks';
 
 /**
  * Create a new headless swap controller

@@ -8,24 +8,21 @@ export class WalletService {
   private onConnectWalletCallback?: (walletAddress: string) => void;
   private onDisconnectWalletCallback?: () => void;
   private config: SwapSdkNetworkConfig;
-  private injectedProvider: Eip1193Provider;
-  private walletProvider: BrowserProvider; // injected provider (window.ethereum or similar)
+  private injectedProvider?: Eip1193Provider;
+  private walletProvider?: BrowserProvider; // injected provider (window.ethereum or similar)
 
   constructor(
     config: SwapSdkNetworkConfig,
-    injectedProvider: Eip1193Provider,
+    injectedProvider?: Eip1193Provider,
   ) {
     this.config = config;
     this.networkProvider = new JsonRpcProvider(config.rpcUrl, {
       name: config.name,
       chainId: config.chainId,
     }, config.additionalJsonRpcApiProviderOptionsOptions);
-    this.injectedProvider = injectedProvider;
-    this.walletProvider = new BrowserProvider(this.injectedProvider);
-    
-    // Auto-connect if wallet provider is provided
-    if (this.injectedProvider) {
-      this.connect(this.injectedProvider);
+    if (injectedProvider) {
+        this.connect(this.injectedProvider);
+
     }
   }
 
@@ -35,8 +32,8 @@ export class WalletService {
       this.walletProvider = new BrowserProvider(this.injectedProvider);
     }
 
-    if (!this.injectedProvider) {
-      throw new Error('No Ethereum wallet detected. Please install MetaMask or another Ethereum wallet.');
+    if (!this.injectedProvider || !this.walletProvider) {
+      throw new Error('Please connect wallet.');
     }
 
     try {

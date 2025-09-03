@@ -466,7 +466,7 @@ export class SwapService {
 
       const signerAddress = await this.signer?.getAddress();
       if (!signerAddress) {
-        throw new Error('Signer not available');
+        throw new Error('Please connect wallet first');
       }
 
       const allowance = await tokenContract.allowance(signerAddress, spenderAddress);
@@ -483,7 +483,7 @@ export class SwapService {
     amountInWei: bigint,
   ): Promise<ContractTransactionResponse | null> {
     if (!this.signer) {
-      throw new Error('Signer not set');
+      throw new Error('Please connect wallet first');
     }
 
     // If fromToken is not native, check allowance and approve if needed
@@ -516,7 +516,7 @@ export class SwapService {
     deadline: number,
   ): Promise<TransactionResponse> {
     if (!this.signer) {
-      throw new Error('Signer not set');
+      throw new Error('Please connect wallet first');
     }
 
     try {

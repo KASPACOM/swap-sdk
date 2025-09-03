@@ -372,7 +372,6 @@
             controller = window.KaspacomSwapSdk.createKaspaComSwapController({
                 networkConfig: 'kasplex-testnet',
                 onChange: updateUIFromState,
-                walletProvider: window.ethereum,
             });
 
             // Listen for account changes
@@ -432,7 +431,7 @@
 
             document.getElementById('connectBtn').addEventListener('click', async () => {
                 try {
-                    const addr = await controller.connectWallet();
+                    const addr = await controller.connectWallet(window.ethereum);
                     document.getElementById('walletInfo').textContent = 'Connected: ' + addr;
                     scheduleSetData();
                 } catch (e) {

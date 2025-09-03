@@ -1,6 +1,7 @@
 import { Trade } from "@uniswap/v2-sdk";
 import { SwapSdkNetworkConfig } from "./networks";
 import { Currency, TradeType } from "@uniswap/sdk-core";
+import { Eip1193Provider } from "ethers";
 
 export interface Erc20Token {
   address: string;
@@ -38,7 +39,7 @@ export interface SwapSectionData {
 
 export interface SwapSdkOptions {
   networkConfig: SwapSdkNetworkConfig | string;
-  walletProvider: any; // Custom wallet provider (e.g., MetaMask, WalletConnect, etc.)
+  walletProvider?: Eip1193Provider; // Custom wallet provider (e.g., MetaMask, WalletConnect, etc.)
   partnerKey?: string;
   onChange?: (state: SwapControllerOutput, patch: Partial<SwapControllerOutput>) => Promise<void>;
 }
