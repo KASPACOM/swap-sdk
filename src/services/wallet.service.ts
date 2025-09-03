@@ -5,8 +5,6 @@ export class WalletService {
   private networkProvider: JsonRpcProvider;
   private signer: Signer | null = null;
   private address: string | null = null;
-  private onConnectWalletCallback?: (walletAddress: string) => void;
-  private onDisconnectWalletCallback?: () => void;
   private config: SwapSdkNetworkConfig;
   private injectedProvider?: Eip1193Provider;
   private walletProvider?: BrowserProvider; // injected provider (window.ethereum or similar)
@@ -90,10 +88,6 @@ export class WalletService {
       // Update injectedProvider and signer
       this.signer = await this.walletProvider.getSigner();
 
-      // Emit the wallet address if callback is provided
-      if (this.onConnectWalletCallback) {
-        this.onConnectWalletCallback(this.address!);
-      }
       return this.address!;
     } catch (error: any) {
       if (error.code === 4001) {
@@ -106,10 +100,6 @@ export class WalletService {
   disconnect(): void {
     this.address = null;
     this.signer = null;
-    // networkProvider remains for read-only operations
-    if (this.onDisconnectWalletCallback) {
-      this.onDisconnectWalletCallback();
-    }
   }
 
   isConnected(): boolean {
@@ -139,30 +129,6 @@ export class WalletService {
     return parseInt(chainId, 16);
   }
 
-  // Register a callback for wallet connected
-  onConnectWallet(cb: (walletAddress: string) => void) {
-    this.onConnectWalletCallback = cb;
-  }
-
-  // Register a callback for wallet disconnected
-  onDisconnectWallet(cb: () => void) {
-    this.onDisconnectWalletCallback = cb;
-  }
-
-  // Call the connect callback
-  private emitConnectWallet(address: string) {
-    if (this.onConnectWalletCallback) {
-      this.onConnectWalletCallback(address);
-    }
-  }
-
-  // Call the disconnect callback
-  private emitDisconnectWallet() {
-    if (this.onDisconnectWalletCallback) {
-      this.onDisconnectWalletCallback();
-    }
-  }
-
   // Connect wallet and emit event with address
   async connectWallet(): Promise<string> {
     if (this.injectedProvider) {
@@ -173,7 +139,6 @@ export class WalletService {
         if (accounts.length > 0 && typeof accounts[0] === 'string') {
           const address: string = accounts[0];
           this.address = address;
-          this.emitConnectWallet(address);
           return address;
         } else {
           throw new Error('No accounts found');
@@ -191,6 +156,5 @@ export class WalletService {
   disconnectWallet() {
     this.address = null;
     this.signer = null;
-    this.emitDisconnectWallet();
   }
 } 
