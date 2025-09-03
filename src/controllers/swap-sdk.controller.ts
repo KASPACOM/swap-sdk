@@ -10,7 +10,7 @@ import {
 import { SwapSdkNetworkConfig } from '../types/networks';
 import { Eip1193Provider } from 'ethers';
 
-const DEFAULT_SETTINGS: SwapSettings = {
+export const DEFAULT_SETTINGS: SwapSettings = {
   maxSlippage: '0.5',
   swapDeadline: 20,
 }

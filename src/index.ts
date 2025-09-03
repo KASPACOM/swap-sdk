@@ -14,6 +14,8 @@ import { SwapSdkOptions } from './types';
 import { NETWORKS } from './types/networks';
 export { NETWORKS} from './types/networks';
 
+export { DEFAULT_SETTINGS as DEFAULT_SWAP_SETTINGS } from './controllers/swap-sdk.controller';
+
 /**
  * Create a new headless swap controller
  * @param options Configuration options for the controller
