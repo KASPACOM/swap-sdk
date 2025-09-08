@@ -1,14 +1,20 @@
 // scripts/rename-cjs.js
-import { readdirSync, renameSync } from "fs";
-import { join } from "path";
+import { readdirSync, renameSync, statSync } from "fs";
+import { join, extname } from "path";
 
-const cjsDir = join(process.cwd(), "dist", "cjs");
+function renameRecursive(dir) {
+  for (const file of readdirSync(dir)) {
+    const fullPath = join(dir, file);
+    const stat = statSync(fullPath);
 
-for (const file of readdirSync(cjsDir)) {
-  if (file.endsWith(".js")) {
-    const oldPath = join(cjsDir, file);
-    const newPath = join(cjsDir, file.replace(/\.js$/, ".cjs"));
-    renameSync(oldPath, newPath);
-    console.log(`Renamed: ${file} -> ${file.replace(/\.js$/, ".cjs")}`);
+    if (stat.isDirectory()) {
+      renameRecursive(fullPath);
+    } else if (extname(file) === ".js") {
+      const newPath = fullPath.replace(/\.js$/, ".cjs");
+      renameSync(fullPath, newPath);
+      console.log(`Renamed: ${fullPath} -> ${newPath}`);
+    }
   }
 }
+
+renameRecursive(join(process.cwd(), "dist", "cjs"));
