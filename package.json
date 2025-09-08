@@ -3,11 +3,11 @@
   "version": "1.0.10",
   "type": "module",
   "description": "A lightweight swap sdk for Kaspa DeFi that can be embedded in wallets or websites",
-  "main": "./dist/umd/index.js",
-  "types": "./dist/umd/index.d.ts",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js", 
+  "types": "dist/index.d.ts", 
   "scripts": {
-    "build": "webpack --config webpack.config.js",
-    "dev": "webpack --config webpack.config.js --watch"
+    "build": "tsup src/index.ts --format cjs,esm --dts"
   },
   "files": [
     "dist",
@@ -31,10 +31,11 @@
     "rxjs": "~7.8.0"
   },
   "devDependencies": {
+    "@types/node": "^18.19.124",
+    "rimraf": "^6.0.1",
     "ts-loader": "^9.4.3",
-    "typescript": "~5.9.2",
-    "webpack": "^5.88.0",
-    "webpack-cli": "^5.1.4"
+    "tsup": "^8.5.0",
+    "typescript": "~5.9.2"
   },
   "repository": {
     "type": "git",
