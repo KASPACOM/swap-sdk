@@ -132,6 +132,13 @@ export class SwapSdkController {
     return this.getState();
   }
 
+  async isNeedApproval(): Promise<boolean> {
+    if (!this.input || !this.walletService!.isConnected() || !this.swapService) throw new Error('Wallet not connected or input missing');
+    const { fromToken, amount } = this.input;
+    if (!fromToken || amount === undefined || !this.state.computed?.amountInRaw) throw new Error('fromToken or amount missing');
+    return (await this.swapService!.isApprovalNeeded(fromToken, BigInt(this.state.computed.amountInRaw))).isApprovalNeeded;
+  }
+
   async approveIfNeeded(): Promise<string | undefined> {
     if (!this.input || !this.walletService!.isConnected()) throw new Error('Wallet not connected or input missing');
     const { fromToken, amount } = this.input;

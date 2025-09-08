@@ -478,10 +478,15 @@ export class SwapService {
     }
   }
 
-  async approveIfNeedApproval(
+  async isApprovalNeeded(
     fromToken: Erc20Token,
     amountInWei: bigint,
-  ): Promise<ContractTransactionResponse | null> {
+  ): Promise<{
+    isApprovalNeeded: boolean,
+    tokenContract?: Contract,
+    signerAddress?: string,
+    allowanceTo?: string
+  }> {
     if (!this.signer) {
       throw new Error('Please connect wallet first');
     }
@@ -499,11 +504,34 @@ export class SwapService {
       const allowanceTo = this.config.proxyAddress || this.config.routerAddress;
       const allowance: bigint = await tokenContract.allowance(signerAddress, allowanceTo);
       if (allowance < amountInWei) {
-        return await tokenContract.approve(allowanceTo, ethers.MaxUint256);
+        return {
+          isApprovalNeeded: true,
+          tokenContract,
+          signerAddress,
+          allowanceTo,
+        };
       }
     }
 
-    return null;
+    return {
+      isApprovalNeeded: false
+    };
+
+  }
+
+  async approveIfNeedApproval(
+    fromToken: Erc20Token,
+    amountInWei: bigint,
+  ): Promise<ContractTransactionResponse | null> {
+
+    const isApprovalNeededInfo = await this.isApprovalNeeded(fromToken, amountInWei);
+
+    if (!isApprovalNeededInfo.isApprovalNeeded) {
+      return null;
+    }
+
+
+    return await isApprovalNeededInfo.tokenContract!.approve(isApprovalNeededInfo.allowanceTo, ethers.MaxUint256);
   }
 
   async swapTokens(
@@ -695,7 +723,7 @@ export class SwapService {
    * @param search Optional search string for symbol or name
    */
   async getTokensFromGraph(limit: number = 100, search?: string): Promise<Erc20Token[]> {
-    const finalLimit = Math.min(limit, 1000); 
+    const finalLimit = Math.min(limit, 1000);
     const query = `{
       tokens(first: ${finalLimit}, where: {
         ${search ? `or: [

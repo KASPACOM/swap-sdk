@@ -1,10 +1,17 @@
 {
   "name": "@kaspacom/swap-sdk",
   "version": "1.0.5",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
+  },
   "description": "A lightweight swap sdk for Kaspa DeFi that can be embedded in wallets or websites",
-  "main": "dist/index.js",
-  "module": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
   "files": [
     "dist",
     "README.md"
@@ -15,8 +22,9 @@
     "clean": "rimraf dist",
     "prebuild": "npm run clean",
     "prepublishOnly": "npm run build",
-    "build": "tsc && npm run build:browser",
-    "build:browser": "esbuild src/index.ts --bundle --format=iife --global-name=KaspacomSwapSdk --outfile=dist/swap-sdk.js",
+    "build": "npm run build:esm && npm run build:cjs",
+    "build:esm": "tsc -p tsconfig.build.esm.json",
+    "build:cjs": "tsc -p tsconfig.build.cjs.json",
     "types": "tsc --emitDeclarationOnly",
     "test": "jest",
     "lint": "eslint src --ext .ts,.tsx"
