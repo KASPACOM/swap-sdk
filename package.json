@@ -24,7 +24,7 @@
     "prepublishOnly": "npm run build",
     "build": "npm run build:esm && npm run build:cjs",
     "build:esm": "tsc -p tsconfig.build.esm.json",
-    "build:cjs": "tsc -p tsconfig.build.cjs.json && rename 's/\\.js$/.cjs/' dist/cjs/*.js",
+    "build:cjs": "tsc -p tsconfig.build.cjs.json && node scripts/rename-cjs.js",
     "types": "tsc --emitDeclarationOnly",
     "test": "jest",
     "lint": "eslint src --ext .ts,.tsx"
