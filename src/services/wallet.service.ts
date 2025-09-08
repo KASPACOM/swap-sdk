@@ -1,5 +1,5 @@
 import { BrowserProvider, JsonRpcProvider, Signer, Eip1193Provider } from 'ethers';
-import { SwapSdkNetworkConfig } from '../types/networks';
+import { SwapSdkNetworkConfig } from '../types';
 
 export class WalletService {
   private networkProvider: JsonRpcProvider;

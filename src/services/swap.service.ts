@@ -1,8 +1,7 @@
 import { BigNumberish, Contract, Signer, BrowserProvider, JsonRpcProvider, parseUnits, formatUnits, ZeroAddress, ethers, hexlify, ContractTransactionResponse, TransactionResponse } from 'ethers';
 import { Currency, CurrencyAmount, Percent, Token, TradeType } from '@uniswap/sdk-core';
 import { Trade, Pair, Route } from '@uniswap/v2-sdk';
-import { ComputedAmounts, Erc20Token, SwapSdkOptions } from '../types';
-import { SwapSdkNetworkConfig } from '../types/networks';
+import { ComputedAmounts, Erc20Token, SwapSdkNetworkConfig, SwapSdkOptions } from '../types';
 
 export const PARTNER_FEE_BPS_DIVISOR = 10_000n;
 

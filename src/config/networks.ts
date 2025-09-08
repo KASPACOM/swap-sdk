@@ -1,15 +1,4 @@
-export interface SwapSdkNetworkConfig {
-  name: string;
-  chainId: number;
-  rpcUrl: string;
-  routerAddress: string;
-  factoryAddress: string;
-  proxyAddress?: string;
-  wethAddress: string;
-  graphEndpoint: string;
-  blockExplorerUrl?: string;
-  additionalJsonRpcApiProviderOptionsOptions?: any;
-}
+import { SwapSdkNetworkConfig } from "../types";
 
 export const NETWORKS: Record<string, SwapSdkNetworkConfig> = {
   'kasplex-testnet': {

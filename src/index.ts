@@ -11,8 +11,8 @@ export { SwapSdkController } from './controllers/swap-sdk.controller';
 
 // Main factory function for easy initialization (headless)
 import { SwapSdkOptions } from './types';
-import { NETWORKS } from './types/networks';
-export { NETWORKS} from './types/networks';
+import { NETWORKS } from './config/networks';
+export { NETWORKS} from './config/networks';
 
 export { DEFAULT_SETTINGS as DEFAULT_SWAP_SETTINGS } from './controllers/swap-sdk.controller';
 

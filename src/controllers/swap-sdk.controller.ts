@@ -6,8 +6,8 @@ import {
   SwapControllerOutput,
   SwapControllerInput,
   LoaderStatuses,
+  SwapSdkNetworkConfig,
 } from '../types';
-import { SwapSdkNetworkConfig } from '../types/networks';
 import { Eip1193Provider } from 'ethers';
 
 export const DEFAULT_SETTINGS: SwapSettings = {

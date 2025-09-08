@@ -1,5 +1,4 @@
 import { Trade } from "@uniswap/v2-sdk";
-import { SwapSdkNetworkConfig } from "./networks";
 import { Currency, TradeType } from "@uniswap/sdk-core";
 import { Eip1193Provider } from "ethers";
 
@@ -79,3 +78,16 @@ export interface SwapControllerOutput {
   computed?: ComputedAmounts;
   loader: LoaderStatuses | null;
 } 
+
+export interface SwapSdkNetworkConfig {
+  name: string;
+  chainId: number;
+  rpcUrl: string;
+  routerAddress: string;
+  factoryAddress: string;
+  proxyAddress?: string;
+  wethAddress: string;
+  graphEndpoint: string;
+  blockExplorerUrl?: string;
+  additionalJsonRpcApiProviderOptionsOptions?: any;
+}
