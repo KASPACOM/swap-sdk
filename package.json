@@ -5,11 +5,11 @@
   "exports": {
     ".": {
       "import": "./dist/esm/index.js",
-      "require": "./dist/cjs/index.js"
+      "require": "./dist/cjs/index.cjs"
     }
   },
   "description": "A lightweight swap sdk for Kaspa DeFi that can be embedded in wallets or websites",
-  "main": "./dist/cjs/index.js",
+  "main": "./dist/cjs/index.cjs",
   "module": "./dist/esm/index.js",
   "types": "./dist/esm/index.d.ts",
   "files": [
@@ -24,7 +24,7 @@
     "prepublishOnly": "npm run build",
     "build": "npm run build:esm && npm run build:cjs",
     "build:esm": "tsc -p tsconfig.build.esm.json",
-    "build:cjs": "tsc -p tsconfig.build.cjs.json",
+    "build:cjs": "tsc -p tsconfig.build.cjs.json && rename 's/\\.js$/.cjs/' dist/cjs/*.js",
     "types": "tsc --emitDeclarationOnly",
     "test": "jest",
     "lint": "eslint src --ext .ts,.tsx"
