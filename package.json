@@ -1,11 +1,11 @@
 {
   "name": "@kaspacom/swap-sdk",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "type": "module",
   "description": "A lightweight swap sdk for Kaspa DeFi that can be embedded in wallets or websites",
   "main": "dist/index.cjs",
-  "module": "dist/index.js", 
-  "types": "dist/index.d.ts", 
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
     "build": "tsup src/index.ts --format cjs,esm --dts"
