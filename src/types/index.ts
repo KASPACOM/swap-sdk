@@ -86,8 +86,9 @@ export interface SwapSdkNetworkConfig {
   routerAddress: string;
   factoryAddress: string;
   proxyAddress?: string;
-  wethAddress: string;
   graphEndpoint: string;
   blockExplorerUrl?: string;
   additionalJsonRpcApiProviderOptionsOptions?: any;
+  nativeToken: Erc20Token;
+  wrappedToken: Erc20Token;
 }

@@ -207,10 +207,13 @@ All types are exported from `swap-widget`.
   - `routerAddress: string`
   - `factoryAddress: string`
   - `proxyAddress?: string`
-  - `wethAddress: string`
   - `graphEndpoint: string`
   - `blockExplorerUrl?: string`
   - `additionalJsonRpcApiProviderOptionsOptions?: any`
+  - `nativeToken: Erc20Token`  
+    The native token of the network (KAS).
+  - `wrappedToken: Erc20Token`  
+    The wrapped native token (WKAS).
 
 - **NETWORKS**
   - Preset map of network keys to `SwapSdkNetworkConfig` objects. Includes `'kasplex-testnet'`.

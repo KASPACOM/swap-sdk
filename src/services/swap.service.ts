@@ -32,7 +32,7 @@ export class SwapService {
     private swapOptions: SwapSdkOptions,
   ) {
     this.provider = provider;
-    this.wethAddress = config.wethAddress;
+    this.wethAddress = config.wrappedToken.address;
     this.chainId = config.chainId;
 
     // Router ABI for swap functions
