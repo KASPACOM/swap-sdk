@@ -7,8 +7,8 @@
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
-    "build": "tsup src/index.ts --format cjs,esm --dts"
+    "dev": "tsup src/index.ts --format cjs,esm,iife --global-name KaspacomSwapSdk  --dts --watch",
+    "build": "tsup src/index.ts --format cjs,esm,iife --global-name KaspaComSwapSdk --dts"
   },
   "files": [
     "dist",
