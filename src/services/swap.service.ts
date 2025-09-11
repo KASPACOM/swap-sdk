@@ -2,6 +2,7 @@ import { BigNumberish, Contract, Signer, BrowserProvider, JsonRpcProvider, parse
 import { Currency, CurrencyAmount, Percent, Token, TradeType } from '@uniswap/sdk-core';
 import { Trade, Pair, Route } from '@uniswap/v2-sdk';
 import { ComputedAmounts, Erc20Token, SwapSdkNetworkConfig, SwapSdkOptions } from '../types';
+import { CustomFeePair } from '../types/CustomFeePair';
 
 export const PARTNER_FEE_BPS_DIVISOR = 10_000n;
 
@@ -19,7 +20,6 @@ export class SwapService {
   private partnerFeeLoadedPromise: Promise<void>;
   private resolvePartnerFeeLoaded: (() => void) | null = null;
   private partnerFee: bigint = 0n;
-  private isFeeActive: boolean = false;
 
   private wethToken: Erc20Token | undefined;
 
@@ -66,9 +66,8 @@ export class SwapService {
 
     const proxyAbi = [
       ...routerAbi,
-      'function partnerFee(bytes32) external view returns (address feeRecipient, uint16 feeBps)',
-      'function feeEnabled() external view returns (bool)',
-    ]
+      "function partners(bytes32) external view returns (address feeRecipient, uint16 feeBps)"
+    ];
 
     this.routerContract = new Contract(config.routerAddress, routerAbi, provider);
     this.factoryContract = new Contract(config.factoryAddress, factoryAbi, provider);
@@ -93,15 +92,11 @@ export class SwapService {
     if (!this.resolvePairsLoaded) {
       return this.partnerFee;
     }
-    if (this.swapOptions.partnerKey) {
-      const [, fee] = await this.proxyContract?.partnerFee(this.swapOptions.partnerKey);
+    if (this.swapOptions.partnerKey && this.proxyContract) {
+      const [, fee] = await this.proxyContract?.partners(this.swapOptions.partnerKey);
       this.partnerFee = fee;
     }
 
-    this.partnerFee = 100n; // Currently taking all, when new proxy will arrive we will need to delete this
-
-    const isFeeActive = await this.proxyContract?.feeEnabled();
-    this.isFeeActive = isFeeActive;
 
     if (this.resolvePartnerFeeLoaded) {
       this.resolvePartnerFeeLoaded();
@@ -264,7 +259,7 @@ export class SwapService {
       reserve1BN.toString(),
     );
 
-    const sdkPair = new Pair(amount0, amount1);
+    const sdkPair = new CustomFeePair(amount0, amount1);
     return sdkPair;
   }
 
@@ -385,11 +380,13 @@ export class SwapService {
         sellAmountWei = (numerator + denominator - 1n) / denominator;
       }
 
+      const sellTokenForContracts = sellToken.address == ethers.ZeroAddress ? this.wethToken! : sellToken;
+      const buyTokenForContracts = buyToken.address == ethers.ZeroAddress ? this.wethToken! : buyToken;
 
       // Get the best path
       const trade = await this.getBestTrade(
-        sellToken.address == ethers.ZeroAddress ? this.wethToken! : sellToken,
-        buyToken.address == ethers.ZeroAddress ? this.wethToken! : buyToken,
+        sellTokenForContracts,
+        buyTokenForContracts,
         sellAmountWei.toString(),
         isOutputAmount,
       );
@@ -400,6 +397,21 @@ export class SwapService {
 
       const amountIn = trade.inputAmount.quotient.toString();
       const amountOut = trade.outputAmount.quotient.toString();
+
+
+      // let amountIn = trade.inputAmount.quotient.toString();
+      // let amountOut = trade.outputAmount.quotient.toString();
+
+      // if (isOutputAmount) {
+      //   const [aIn] = await this.routerContract.getAmountsIn(sellAmountWei, [sellTokenForContracts.address, buyTokenForContracts.address]);
+      //   amountIn = String(aIn);
+      // } else {
+      //   const [, aOut] = await this.routerContract.getAmountsOut(sellAmountWei, [sellTokenForContracts.address, buyTokenForContracts.address]);
+      //   amountOut = String(aOut);
+      // }
+
+
+
 
       let amounts: ComputedAmounts = {
         amountIn: formatUnits(amountIn, sellToken.decimals),
@@ -557,7 +569,7 @@ export class SwapService {
       let swapData: string;
 
 
-      const to = this.isFeeActive ? this.config.proxyAddress : signerAddress;
+      const to = this.config.proxyAddress ? this.config.proxyAddress : signerAddress;
 
       if (isOutputAmount) {
         // Buy mode: user specifies output amount (isOutputAmount === true)
@@ -619,7 +631,7 @@ export class SwapService {
       }
 
       if (this.proxyContract) {
-        swapData = hexlify(this.concatSelectorAndParams(ethers.getBytes(swapData), [], "permit", this.swapOptions.partnerKey));
+        swapData = hexlify(this.concatSelectorAndParams(ethers.getBytes(swapData), [], "PERMIT", this.swapOptions.partnerKey));
       }
 
       tx = await this.signer.sendTransaction({
@@ -694,7 +706,7 @@ export class SwapService {
       }
 
       // Create pair instance
-      const pair = new Pair(
+      const pair = new CustomFeePair(
         CurrencyAmount.fromRawAmount(fromTokenInstance, '0'),
         CurrencyAmount.fromRawAmount(toTokenInstance, '0')
       );
@@ -773,14 +785,15 @@ export class SwapService {
     partnerKey?: string
   ): Uint8Array {
     // Flatten permits/params into single bytes
-    const paramsBytes = arrayOfBytes.length === 0
-      ? new Uint8Array(0)
-      : arrayOfBytes.reduce((acc, arr) => {
-        const res = new Uint8Array(acc.length + arr.length);
-        res.set(acc, 0);
-        res.set(arr, acc.length);
-        return res;
-      });
+    const paramsBytes =
+      arrayOfBytes.length === 0
+        ? new Uint8Array(0)
+        : arrayOfBytes.reduce((acc, arr) => {
+          const res = new Uint8Array(acc.length + arr.length);
+          res.set(acc, 0);
+          res.set(arr, acc.length);
+          return res;
+        });
 
     const arrayLengthByte = new Uint8Array([arrayOfBytes.length & 0xff]);
 
@@ -796,7 +809,7 @@ export class SwapService {
 
     if (partnerKey) {
       const partnerKeyBytes = ethers.getBytes(partnerKey); // 32 bytes
-      const partnerFlagHash = ethers.keccak256(ethers.toUtf8Bytes("is_partner_fee"));
+      const partnerFlagHash = ethers.keccak256(ethers.toUtf8Bytes("PARTNER"));
       const partnerFlagBytes = ethers.getBytes(partnerFlagHash).slice(0, 16); // 16 bytes
       parts.push(partnerKeyBytes, partnerFlagBytes);
     }

@@ -1,5 +1,5 @@
 import { WalletService } from '../services/wallet.service';
-import { PARTNER_FEE_BPS_DIVISOR, SwapService } from '../services/swap.service';
+import { SwapService } from '../services/swap.service';
 import {
   SwapSdkOptions,
   SwapSettings,
@@ -234,7 +234,7 @@ export class SwapSdkController {
   }
 
   async getPartnerFee(): Promise<number> {
-    return Number(await this.swapService!.loadPartnerFee()) / Number(PARTNER_FEE_BPS_DIVISOR);
+    return Number(await this.swapService!.loadPartnerFee()) / 100;
   }
 
 

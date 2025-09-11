@@ -6,10 +6,10 @@ export const NETWORKS: Record<string, SwapSdkNetworkConfig> = {
     name: 'Kasplex Test',
     chainId: 167012,
     rpcUrl: 'https://rpc.kasplextest.xyz',
-    routerAddress: '0x5A410f79f58a11344E3523d99820Cf231bc888bd',
-    factoryAddress: '0x772B3321B37C1a9aeF0Da1B5A6453E1C2A264beF',
-    proxyAddress: '0xbE448f863d2bB7bCcD9185A854DF2D8d63498dB0',
-    graphEndpoint: 'https://dev-graph-kasplex.kaspa.com/subgraphs/name/uniswap-v2',
+    routerAddress: '0x81Cc4e7DbC652ec9168Bc2F4435C02d7F315148e',
+    factoryAddress: '0x89d5842017ceA7dd18D10EE6c679cE199d2aD99E',
+    proxyAddress: '0x5B7e7830851816f8ad968B0e0c336bd50b4860Ad',
+    graphEndpoint: 'https://dev-graph-kasplex.kaspa.com/subgraphs/name/kasplex-testnet-new-v2-core',
     blockExplorerUrl: 'https://explorer.testnet.kasplextest.xyz',
     additionalJsonRpcApiProviderOptionsOptions: {
       batchMaxCount: 1,
@@ -17,7 +17,7 @@ export const NETWORKS: Record<string, SwapSdkNetworkConfig> = {
       batchStallTime: 0,
     },
     wrappedToken: {
-      address: '0x654A3287c317D4Fc6e8482FeF523Dc4572b563AA',
+      address: '0xf40178040278E16c8813dB20a84119A605812FB3',
       decimals: 18,
       name: 'Wrapped Kasplex Kaspa',
       symbol: 'WKAS',

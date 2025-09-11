@@ -133,7 +133,6 @@ Returns: `SwapSdkController`
 - **getTokensFromGraph(limit?: number, search?: string): Promise<any[]>**
   - Queries the subgraph for tokens. Use for token lists/search.
 
-
 ## Types
 
 All types are exported from `swap-widget`.
