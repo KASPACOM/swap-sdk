@@ -27,15 +27,22 @@ export class CustomFeePair extends UniPair {
 
   // Override getInputAmount for 1% fee
   getInputAmount(outputAmount: CurrencyAmount<Token>): [CurrencyAmount<Token>, CustomFeePair] {
+
     const outputReserve = this.reserveOf(outputAmount.currency);
     const inputCurrency = this.token0.equals(outputAmount.currency) ? this.token1 : this.token0;
     const inputReserve = this.reserveOf(inputCurrency);
+
 
     const feeNumerator = JSBI.BigInt(100);
     const feeDenominator = JSBI.BigInt(99); // invert to account for 1% fee
 
     const numerator = JSBI.multiply(JSBI.multiply(inputReserve.quotient, outputAmount.quotient), feeNumerator);
     const denominator = JSBI.multiply(JSBI.subtract(outputReserve.quotient, outputAmount.quotient), feeDenominator);
+
+    if (JSBI.lessThanOrEqual(denominator, JSBI.BigInt(0))) {
+      throw new Error('Insufficient liquidity for this trade');
+    }
+    
     const inputAmount = JSBI.add(JSBI.divide(numerator, denominator), JSBI.BigInt(1));
 
     return [
