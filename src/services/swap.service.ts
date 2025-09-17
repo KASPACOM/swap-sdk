@@ -151,7 +151,7 @@ export class SwapService {
       });
       if (!response.ok) throw new Error(`Network error: ${response.status}`);
       const { data } = await response.json();
-      if (!data || !data.pairs) return;
+      if (!data || !data.pairs) throw new Error(`No pairs found: ${data}`);
       const pairs: Pair[] = [];
       for (const pair of data.pairs) {
         pairs.push(
