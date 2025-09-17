@@ -303,8 +303,6 @@ export class SwapService {
       isOutputAmount ? sdkToToken : sdkFromToken,
       amountInWei,
     );
-    await this.waitForPairsLoaded();
-    await this.waitForPartnerFeeLoaded();
 
     const pairs = this.getPairs();
     if (!pairs || pairs.length === 0) {
@@ -362,6 +360,8 @@ export class SwapService {
     computed: ComputedAmounts,
   }> {
     try {
+      await this.waitForPairsLoaded();
+      await this.waitForPartnerFeeLoaded();
 
       // Round the input amount to avoid parseUnits errors
       const roundedAmountIn = this.roundToDecimals(targetAmount, isOutputAmount ? buyToken.decimals : sellToken.decimals);
