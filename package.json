@@ -40,7 +40,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/KASPACOM/swap-sdk"
+    "url": "git+https://github.com/KASPACOM/swap-sdk.git"
   },
   "bugs": {
     "url": "https://github.com/KASPACOM/swap-sdk/issues"
