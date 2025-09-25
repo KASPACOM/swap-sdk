@@ -40,7 +40,7 @@ const controller = createKaspaComSwapController({
   walletProvider: window.ethereum, // any EIP-1193 provider
   onChange: async (state, patch) => {
     console.log('state changed', patch, state);
-    // Render your UI from state.computed, state.tradeInfo, state.loader, etc.
+    // Render your UI from state.computed, state.loader, etc.
   },
 });
 ```
@@ -105,6 +105,8 @@ Creates and returns a `SwapSdkController` instance. Accepts either a preset stri
 - **options.walletProvider**: EIP-1193 provider (e.g., `window.ethereum`)
 - **options.partnerKey?**: Optional partner key string
 - **options.onChange?**: `(state, patch) => Promise<void>` callback invoked on any state change
+- **options.refreshPairsInterval?**: Optional Number of milliseconds to refresh pairs from the subgraph (for updated quotes)
+- **options.updateQuoteAfterRefreshPairs?**: Optional boolean to update quote after refreshing pairs
 
 Returns: `SwapSdkController`
 
@@ -132,6 +134,10 @@ Returns: `SwapSdkController`
   - Fetches the current partner fee in percentage (bps/divisor).
 - **getTokensFromGraph(limit?: number, search?: string): Promise<any[]>**
   - Queries the subgraph for tokens. Use for token lists/search.
+- **refreshTokensAndUpdateQuote(forceQuoteUpdate = false): Promise<void>**
+  - Refreshes tokens from the subgraph and updates quote if configured. Needed to be called after swap completed or once in a while to get updated quotes.
+- **destroy(): void**
+  - Releases all resources from the controller, needs to be called after done using the controller.
 
 ## Types
 
@@ -195,7 +201,7 @@ All types are exported from `swap-widget`.
   - `error?: string`
   - `txHash?: string` (Swap tx hash)
   - `approveTxHash?: string` (Approval transaction tx hash)
-  - `tradeInfo?: Trade<Currency, Currency, TradeType>` (Uniswap V2 trade)
+  - `path?: Token[]` (Trade path)
   - `computed?: ComputedAmounts`
   - `loader: LoaderStatuses | null`
 

@@ -214,7 +214,7 @@
         </div>
     </div>
 
-    <script src="dist/swap-sdk.js"></script>
+    <script src="dist/index.global.js"></script>
     <script>
         const startingTokens = [
             { address: '0x0000000000000000000000000000000000000000', symbol: 'KAS', name: 'Kaspa', decimals: 18 },
@@ -262,6 +262,7 @@
         }
 
         async function updateUIFromState(state, changes) {
+            console.log('change', changes);
             const requiredAmount = document.getElementById('requiredAmount');
             const expectedOut = document.getElementById('expectedOut');
             const minOut = document.getElementById('minOut');
@@ -358,7 +359,7 @@
         }
 
         async function init() {
-            if (!window.KaspacomSwapSdk) {
+            if (!window.KaspaComSwapSdk) {
                 alert('Bundle not loaded');
                 return;
             }
@@ -369,9 +370,11 @@
             }
 
 
-            controller = window.KaspacomSwapSdk.createKaspaComSwapController({
+            controller = window.KaspaComSwapSdk.createKaspaComSwapController({
                 networkConfig: 'kasplex-testnet',
                 onChange: updateUIFromState,
+                refreshPairsInterval: 20000,
+                updateQuoteAfterRefreshPairs: true
             });
 
             // Listen for account changes
@@ -446,7 +449,8 @@
                 try {
                     const tx = await controller.swap();
                     console.log('Swapped, tx:', tx);
-                    alert('Successfully Swapped')
+                    alert('Successfully Swapped');
+                    controller.refreshTokensAndUpdateQuote(true);
                 } catch (e) {
                     console.error(e);
                     alert(e?.message || e);

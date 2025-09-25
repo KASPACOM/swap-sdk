@@ -1,7 +1,7 @@
 import { BigNumberish, Contract, Signer, BrowserProvider, JsonRpcProvider, parseUnits, formatUnits, ZeroAddress, ethers, hexlify, ContractTransactionResponse, TransactionResponse } from 'ethers';
 import { Currency, CurrencyAmount, Percent, Token, TradeType } from '@uniswap/sdk-core';
 import { Trade, Pair, Route } from '@uniswap/v2-sdk';
-import { ComputedAmounts, Erc20Token, SwapSdkNetworkConfig, SwapSdkOptions } from '../types';
+import { ComputedAmounts, Erc20Token, KaspaComSdkPair, SwapSdkNetworkConfig, SwapSdkOptions } from '../types';
 import { CustomFeePair } from '../types/CustomFeePair';
 
 export const PARTNER_FEE_BPS_DIVISOR = 10_000n;
@@ -12,19 +12,15 @@ export class SwapService {
   private routerContract: Contract;
   private factoryContract: Contract;
   private proxyContract?: Contract;
-  private wethAddress: string;
   private chainId: number;
   private pairs: Pair[] = [];
   private pairsLoadedPromise: Promise<void>;
   private resolvePairsLoaded: (() => void) | null = null;
+  private rejectPairsLoaded: ((error: any) => void) | null = null;
   private partnerFeeLoadedPromise: Promise<void>;
   private resolvePartnerFeeLoaded: (() => void) | null = null;
+  private rejectPartnerFeeLoaded: ((error: any) => void) | null = null;
   private partnerFee: bigint = 0n;
-
-  private wethToken: Erc20Token | undefined;
-
-
-
 
   constructor(
     provider: BrowserProvider | JsonRpcProvider,
@@ -32,7 +28,6 @@ export class SwapService {
     private swapOptions: SwapSdkOptions,
   ) {
     this.provider = provider;
-    this.wethAddress = config.wrappedToken.address;
     this.chainId = config.chainId;
 
     // Router ABI for swap functions
@@ -51,7 +46,7 @@ export class SwapService {
       'function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts)',
       'function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut) external pure returns (uint amountOut)',
       'function getAmountIn(uint amountOut, uint reserveIn, uint reserveOut) internal pure returns (uint amountIn)',
-      'function getAmountsIn(address factory, uint amountOut, address[] memory path) internal view returns (uint[] memory amounts)',
+      'function getAmountsIn(uint amountOut, address[] memory path) internal view returns (uint[] memory amounts)',
 
       // Get WETH
       'function WETH() external pure returns (address)'
@@ -76,14 +71,16 @@ export class SwapService {
       this.proxyContract = new Contract(config.proxyAddress, proxyAbi, provider);
     }
 
-    this.pairsLoadedPromise = new Promise((resolve) => {
+    this.pairsLoadedPromise = new Promise((resolve, reject) => {
       this.resolvePairsLoaded = resolve;
+      this.rejectPairsLoaded = reject;
     });
 
-    this.partnerFeeLoadedPromise = new Promise((resolve) => {
+    this.partnerFeeLoadedPromise = new Promise((resolve, reject) => {
       this.resolvePartnerFeeLoaded = resolve;
+      this.rejectPartnerFeeLoaded = reject;
     });
-    this.loadAllPairsFromGraph();
+    this.loadAllPairs();
     this.loadPartnerFee();
   }
 
@@ -92,18 +89,30 @@ export class SwapService {
     if (!this.resolvePairsLoaded) {
       return this.partnerFee;
     }
-    if (this.swapOptions.partnerKey && this.proxyContract) {
-      const [, fee] = await this.proxyContract?.partners(this.swapOptions.partnerKey);
-      this.partnerFee = fee;
+    try {
+      if (this.swapOptions.partnerKey && this.proxyContract) {
+        const [, fee] = await this.proxyContract?.partners(this.swapOptions.partnerKey);
+        this.partnerFee = fee;
+      }
+
+
+      if (this.resolvePartnerFeeLoaded) {
+        this.resolvePartnerFeeLoaded();
+        this.resolvePartnerFeeLoaded = null;
+      }
+
+      return this.partnerFee;
+    } catch (error) {
+      if (this.rejectPartnerFeeLoaded) {
+        this.rejectPartnerFeeLoaded(error);
+        this.partnerFeeLoadedPromise = new Promise((resolve, reject) => {
+          this.resolvePartnerFeeLoaded = resolve;
+          this.rejectPartnerFeeLoaded = reject;
+        })
+      }
+      throw error;
     }
 
-
-    if (this.resolvePartnerFeeLoaded) {
-      this.resolvePartnerFeeLoaded();
-      this.resolvePartnerFeeLoaded = null;
-    }
-
-    return this.partnerFee;
   }
 
   setSigner(signer: Signer): void {
@@ -128,11 +137,7 @@ export class SwapService {
     return num.toFixed(decimals);
   }
 
-  /**
-   * Loads all pairs from The Graph and caches them as Uniswap SDK Pair instances.
-   * @param graphEndpoint The GraphQL endpoint URL
-   */
-  public async loadAllPairsFromGraph(): Promise<void> {
+  async refreshPairsFromGraph(): Promise<KaspaComSdkPair[]> {
     // Query for pairs with token info and reserves
     const query = `{
       pairs(first: 1000) {
@@ -143,43 +148,39 @@ export class SwapService {
         token1 { id symbol name decimals }
       }
     }`;
-    try {
-      const response = await fetch(this.config.graphEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query })
-      });
-      if (!response.ok) throw new Error(`Network error: ${response.status}`);
-      const { data } = await response.json();
-      if (!data || !data.pairs) throw new Error(`No pairs found: ${data}`);
-      const pairs: Pair[] = [];
-      for (const pair of data.pairs) {
-        pairs.push(
-          this.createSDKPair(pair)
-        );
-      }
-      this.pairs = pairs;
 
-      // Find the WETH token from the pairs and set wethToken to a new Token instance if found
-      const wethPair = data.pairs.find(
-        (pair: any) =>
-          pair.token0.id.toLowerCase() === this.wethAddress.toLowerCase() ||
-          pair.token1.id.toLowerCase() === this.wethAddress.toLowerCase()
+    const response = await fetch(this.config.graphEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query })
+    });
+    if (!response.ok) throw new Error(`Network error: ${response.status}`);
+    const { data } = await response.json();
+    if (!data || !data.pairs) throw new Error(`No pairs found: ${data}`);
+
+    return data.pairs;
+
+  }
+
+  async refreshPairs(): Promise<void> {
+    const pairsResult = this.swapOptions.getPairsData ? await this.swapOptions.getPairsData() : await this.refreshPairsFromGraph();
+
+    const pairs: Pair[] = [];
+    for (const pair of pairsResult) {
+      pairs.push(
+        this.createSDKPair(pair)
       );
-      if (wethPair) {
-        const tokenData =
-          wethPair.token0.id.toLowerCase() === this.wethAddress.toLowerCase()
-            ? wethPair.token0
-            : wethPair.token1;
-        this.wethToken = {
-          address: tokenData.id,
-          symbol: tokenData.symbol,
-          name: tokenData.name,
-          decimals: Number(tokenData.decimals),
-        }
-      } else {
-        throw new Error('No weth token found')
-      }
+    }
+    this.pairs = pairs;
+  }
+
+  /**
+   * Loads all pairs from The Graph and caches them as Uniswap SDK Pair instances.
+   * @param graphEndpoint The GraphQL endpoint URL
+   */
+  protected async loadAllPairs(): Promise<void> {
+    try {
+      await this.refreshPairs();
 
       if (this.resolvePairsLoaded) {
         this.resolvePairsLoaded();
@@ -187,10 +188,16 @@ export class SwapService {
       }
     } catch (error) {
       console.error('Error loading pairs from graph:', error);
-      if (this.resolvePairsLoaded) {
-        this.resolvePairsLoaded(); // resolve anyway to avoid deadlock
-        this.resolvePairsLoaded = null;
+      if (this.rejectPairsLoaded) {
+        this.rejectPairsLoaded(error as any); // resolve anyway to avoid deadlock
       }
+
+      this.pairsLoadedPromise = new Promise((resolve, reject) => {
+        this.resolvePairsLoaded = resolve;
+        this.rejectPairsLoaded = reject;
+      });
+
+      this.loadAllPairs();
     }
   }
 
@@ -202,26 +209,8 @@ export class SwapService {
     return await this.partnerFeeLoadedPromise;
   }
 
-  createSDKPair(pair: {
-    id: string;
-    token0: {
-      id: string;
-      symbol: string;
-      name: string;
-      decimals: string | number;
-    };
-    token1: {
-      id: string;
-      symbol: string;
-      name: string;
-      decimals: string | number;
-    };
-    reserve0?: string;
-    reserve1?: string;
-    positionValueUsd?: number;
-    totalTokens?: number;
-  }): Pair {
-    const { token0, token1, id, reserve0, reserve1 } = pair;
+  createSDKPair(pair: KaspaComSdkPair): Pair {
+    const { token0, token1, reserve0, reserve1 } = pair;
 
     const sdkToken0 = new Token(
       this.chainId,
@@ -380,8 +369,8 @@ export class SwapService {
         sellAmountWei = (numerator + denominator - 1n) / denominator;
       }
 
-      const sellTokenForContracts = sellToken.address == ethers.ZeroAddress ? this.wethToken! : sellToken;
-      const buyTokenForContracts = buyToken.address == ethers.ZeroAddress ? this.wethToken! : buyToken;
+      const sellTokenForContracts = sellToken.address == ethers.ZeroAddress ? this.config.wrappedToken : sellToken;
+      const buyTokenForContracts = buyToken.address == ethers.ZeroAddress ? this.config.wrappedToken : buyToken;
 
       // Get the best path
       const trade = await this.getBestTrade(
@@ -391,27 +380,26 @@ export class SwapService {
         isOutputAmount,
       );
 
+      const pathAddresses = trade?.route.path.map(token => token.address);
+
       if (!trade) {
         throw new Error('No trade path found for the given tokens and amount.');
       }
 
-      const amountIn = trade.inputAmount.quotient.toString();
-      const amountOut = trade.outputAmount.quotient.toString();
 
+      let amountIn: string = '0';
+      let amountOut: string = '0';
 
-      // let amountIn = trade.inputAmount.quotient.toString();
-      // let amountOut = trade.outputAmount.quotient.toString();
-
-      // if (isOutputAmount) {
-      //   const [aIn] = await this.routerContract.getAmountsIn(sellAmountWei, [sellTokenForContracts.address, buyTokenForContracts.address]);
-      //   amountIn = String(aIn);
-      // } else {
-      //   const [, aOut] = await this.routerContract.getAmountsOut(sellAmountWei, [sellTokenForContracts.address, buyTokenForContracts.address]);
-      //   amountOut = String(aOut);
-      // }
-
-
-
+      if (isOutputAmount) {
+        const [aIn] = await this.routerContract.getAmountsIn(sellAmountWei, pathAddresses);
+        amountIn = String(aIn);
+        amountOut = String(parseUnits(targetAmount, buyToken.decimals));
+      } else {
+        const [, aOut] = await this.routerContract.getAmountsOut(sellAmountWei, pathAddresses);
+        amountOut = String(aOut);
+        amountIn = String(parseUnits(targetAmount, sellToken.decimals));
+        console.log(amountOut, amountIn);
+      }
 
       let amounts: ComputedAmounts = {
         amountIn: formatUnits(amountIn, sellToken.decimals),
@@ -425,11 +413,16 @@ export class SwapService {
       let maxAmountIn, minAmountOut;
 
       if (isOutputAmount) {
-        maxAmountIn = trade.maximumAmountIn(slippagePercent).quotient.toString();
+        const slippageAmount = BigInt(amountIn) * BigInt(slippagePercent.numerator.toString()) / BigInt(slippagePercent.denominator.toString());
+        const maxAmountInBigInt = BigInt(amountIn) + slippageAmount;
+        maxAmountIn = maxAmountInBigInt.toString();
         amounts.maxAmountInRaw = maxAmountIn;
         amounts.maxAmountIn = formatUnits(maxAmountIn, sellToken.decimals);
       } else {
-        minAmountOut = trade.minimumAmountOut(slippagePercent).quotient.toString();
+        const amountOutBigInt = BigInt(amountOut);
+        const slippageAmount = amountOutBigInt * BigInt(slippagePercent.numerator.toString()) / BigInt(slippagePercent.denominator.toString());
+        const minAmountOutBigInt = amountOutBigInt - slippageAmount;
+        minAmountOut = minAmountOutBigInt.toString();
         amounts.minAmountOutRaw = minAmountOut;
         amounts.minAmountOut = formatUnits(minAmountOut, buyToken.decimals);
       }
@@ -437,8 +430,8 @@ export class SwapService {
       if (this.partnerFee && this.partnerFee > 0n) {
         if (!isOutputAmount) {
           // ---- Exact input: remove partner fee from amountOut ----
-          const amountOut = BigInt(trade.outputAmount.quotient.toString());
-          const amountOutMinusFee = (amountOut * (PARTNER_FEE_BPS_DIVISOR - this.partnerFee)) / PARTNER_FEE_BPS_DIVISOR;
+          const amountOutBigInt = BigInt(amountOut);
+          const amountOutMinusFee = (amountOutBigInt * (PARTNER_FEE_BPS_DIVISOR - this.partnerFee)) / PARTNER_FEE_BPS_DIVISOR;
 
           amounts.amountOutRaw = amountOutMinusFee.toString();
           amounts.amountOut = formatUnits(amountOutMinusFee, buyToken.decimals);

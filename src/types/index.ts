@@ -1,5 +1,5 @@
 import { Trade } from "@uniswap/v2-sdk";
-import { Currency, TradeType } from "@uniswap/sdk-core";
+import { Currency, Token, TradeType } from "@uniswap/sdk-core";
 import { Eip1193Provider } from "ethers";
 
 export interface Erc20Token {
@@ -41,6 +41,9 @@ export interface SwapSdkOptions {
   walletProvider?: Eip1193Provider; // Custom wallet provider (e.g., MetaMask, WalletConnect, etc.)
   partnerKey?: string;
   onChange?: (state: SwapControllerOutput, patch: Partial<SwapControllerOutput>) => Promise<void>;
+  refreshPairsInterval?: number;
+  updateQuoteAfterRefreshPairs?: boolean;
+  getPairsData?: () => Promise<KaspaComSdkPair[]>;
 }
 
 
@@ -74,10 +77,14 @@ export interface SwapControllerOutput {
   error?: string;
   txHash?: string;
   approveTxHash?: string;
+  /**
+   * @deprecated Use `computed` instead, The tradeInfo can contain incorrect information
+   */
   tradeInfo?: Trade<Currency, Currency, TradeType.EXACT_INPUT> | Trade<Currency, Currency, TradeType.EXACT_OUTPUT>;
+  path?: Token[],
   computed?: ComputedAmounts;
   loader: LoaderStatuses | null;
-} 
+}
 
 export interface SwapSdkNetworkConfig {
   name: string;
@@ -91,4 +98,24 @@ export interface SwapSdkNetworkConfig {
   additionalJsonRpcApiProviderOptionsOptions?: any;
   nativeToken: Erc20Token;
   wrappedToken: Erc20Token;
+}
+
+export interface KaspaComSdkPair {
+  id: string;
+  token0: {
+    id: string;
+    symbol: string;
+    name: string;
+    decimals: string | number;
+  };
+  token1: {
+    id: string;
+    symbol: string;
+    name: string;
+    decimals: string | number;
+  };
+  reserve0: string;
+  reserve1: string;
+  positionValueUsd?: number;
+  totalTokens?: number;
 }
