@@ -29,5 +29,32 @@ export const NETWORKS: Record<string, SwapSdkNetworkConfig> = {
       symbol: 'KAS',
     }
   },
+  'kasplex': {
+    name: 'Kasplex',
+    chainId: 202555,
+    rpcUrl: 'https://evmrpc.kasplex.org',
+    routerAddress: '0x3a1f0bD164fe9D8fa18Da5abAB352dC634CA5F10',
+    factoryAddress: '0xa9CBa43A407c9Eb30933EA21f7b9D74A128D613c',
+    proxyAddress: '0x4c5BEaAE83577E3a117ce2F477fC42a1EA39A8a3',
+    graphEndpoint: 'https://graph-kasplex.kaspa.com/subgraphs/name/kasplex-v2-core',
+    blockExplorerUrl: 'https://explorer.kasplex.org',
+    additionalJsonRpcApiProviderOptionsOptions: {
+      batchMaxCount: 1,
+      batchMaxSize: 1,
+      batchStallTime: 0,
+    },
+    wrappedToken: {
+      address: '0x2c2Ae87Ba178F48637acAe54B87c3924F544a83e',
+      decimals: 18,
+      name: 'Wrapped KAS',
+      symbol: 'WKAS',
+    },
+    nativeToken: {
+      address: ethers.ZeroAddress,
+      decimals: 18,
+      name: 'Kasplex Kaspa',
+      symbol: 'KAS',
+    }
+  }
   // Add more networks as needed
 }; 

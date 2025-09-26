@@ -18,12 +18,11 @@ export const DEFAULT_SETTINGS: SwapSettings = {
 export class SwapSdkController {
   private walletService: WalletService | undefined;
   private swapService: SwapService | undefined;
+  private refreshPairsTimeout: NodeJS.Timeout | null = null;
 
   private state: SwapControllerOutput = {
     loader: null,
   };
-
-
 
   private input: SwapControllerInput = {
     fromToken: null,
@@ -33,12 +32,11 @@ export class SwapSdkController {
     settings: DEFAULT_SETTINGS,
   };
 
-
-
   private options: SwapSdkOptions;
 
   constructor(options: SwapSdkOptions) {
     this.options = options;
+
 
     this.initServices();
   }
@@ -48,12 +46,19 @@ export class SwapSdkController {
       (this.options.networkConfig as SwapSdkNetworkConfig),
       this.options.walletProvider
     );
-
-    this.swapService = new SwapService(
+    
+    this.swapService = new (this.options.swapServiceClass || SwapService)(
       this.walletService.getProvider()!,
       (this.options.networkConfig as SwapSdkNetworkConfig),
       this.options,
-    );
+    ) as SwapService;
+
+    if (this.options.refreshPairsInterval) {
+      this.swapService.waitForPairsLoaded().finally(() => {
+        this.refreshPairsTimeout = setTimeout(this.refreshTokensAndUpdateQuoteAndSetTimeout.bind(this), this.options.refreshPairsInterval);
+      })
+    }
+
   }
 
   private async setChange(patch: Partial<SwapControllerOutput>): Promise<void> {
@@ -113,6 +118,7 @@ export class SwapSdkController {
       await this.setChange({
         computed: tradeResult.computed,
         tradeInfo: tradeResult.trade,
+        path: tradeResult.trade.route.path,
         loader: null,
       });
     } catch (error: any) {
@@ -187,12 +193,10 @@ export class SwapSdkController {
 
       await this.setChange({ loader: LoaderStatuses.SWAPPING });
 
-      // Get the trade path from the tradeInfo
-      const trade = this.state.tradeInfo;
-      if (!trade) throw new Error('Trade info missing - calculate quote first');
+      if (!this.state.path) throw new Error('Trade info missing - calculate quote first');
 
       // Extract path from the trade route
-      const path = trade.route.path.map(token => token.address);
+      const path = this.state.path.map(token => token.address);
       if (path.length === 0) throw new Error('Trade path missing');
 
       // Use the computed amounts for the swap
@@ -246,7 +250,36 @@ export class SwapSdkController {
     return await this.swapService.getTokensFromGraph(limit, search);
   }
 
-  get currentNetworkConfig(): SwapSdkNetworkConfig  {
+  get currentNetworkConfig(): SwapSdkNetworkConfig {
     return this.options.networkConfig as SwapSdkNetworkConfig;
+  }
+
+
+  async destroy() {
+    if (this.walletService) {
+      this.walletService.destroy();
+    }
+
+    if (this.refreshPairsTimeout) {
+      clearTimeout(this.refreshPairsTimeout);
+      this.refreshPairsTimeout = null;
+    }
+  }
+
+  async refreshTokensAndUpdateQuote(forceQuoteUpdate = false) {
+    await this.swapService?.refreshPairsFromGraph();
+    if ((this.options.updateQuoteAfterRefreshPairs || forceQuoteUpdate) && !this.state.loader) {
+      await this.calculateQuoteIfNeeded();
+    }
+  }
+
+  private async refreshTokensAndUpdateQuoteAndSetTimeout() {
+    try {
+      await this.refreshTokensAndUpdateQuote();
+    } catch (error) {
+      console.error(error);
+    }
+
+    this.refreshPairsTimeout = setTimeout(this.refreshTokensAndUpdateQuoteAndSetTimeout.bind(this), this.options.refreshPairsInterval);
   }
 } 

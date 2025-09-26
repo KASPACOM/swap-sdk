@@ -114,6 +114,13 @@ export class WalletService {
     return this.walletProvider || this.networkProvider;
   }
 
+  destroy() {
+    if (this.walletProvider) {
+      this.networkProvider.destroy();
+      this.disconnect();
+    }
+  }
+
   getSigner(): Signer | null {
     return this.signer;
   }
@@ -150,11 +157,5 @@ export class WalletService {
     } else {
       throw new Error('No Ethereum wallet detected. Please connect a wallet provider.');
     }
-  }
-
-  // Disconnect wallet and emit event
-  disconnectWallet() {
-    this.address = null;
-    this.signer = null;
   }
 } 
