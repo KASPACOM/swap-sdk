@@ -9,18 +9,18 @@ export const PARTNER_FEE_BPS_DIVISOR = 10_000n;
 export class SwapService {
   private provider: BrowserProvider | JsonRpcProvider;
   private signer: Signer | null = null;
-  private routerContract: Contract;
-  private factoryContract: Contract;
-  private proxyContract?: Contract;
-  private chainId: number;
-  private pairs: Pair[] = [];
-  private pairsLoadedPromise: Promise<void>;
-  private resolvePairsLoaded: (() => void) | null = null;
-  private rejectPairsLoaded: ((error: any) => void) | null = null;
-  private partnerFeeLoadedPromise: Promise<void>;
-  private resolvePartnerFeeLoaded: (() => void) | null = null;
-  private rejectPartnerFeeLoaded: ((error: any) => void) | null = null;
-  private partnerFee: bigint = 0n;
+  protected routerContract: Contract;
+  protected factoryContract: Contract;
+  protected proxyContract?: Contract;
+  protected chainId: number;
+  protected pairs: Pair[] = [];
+  protected pairsLoadedPromise: Promise<void>;
+  protected resolvePairsLoaded: (() => void) | null = null;
+  protected rejectPairsLoaded: ((error: any) => void) | null = null;
+  protected partnerFeeLoadedPromise: Promise<void>;
+  protected resolvePartnerFeeLoaded: (() => void) | null = null;
+  protected rejectPartnerFeeLoaded: ((error: any) => void) | null = null;
+  protected partnerFee: bigint = 0n;
 
   constructor(
     provider: BrowserProvider | JsonRpcProvider,
@@ -29,9 +29,28 @@ export class SwapService {
   ) {
     this.provider = provider;
     this.chainId = config.chainId;
+    this.routerContract = new Contract(config.routerAddress, this.routerAbi, provider);
+    this.factoryContract = new Contract(config.factoryAddress, this.factoryAbi, provider);
 
-    // Router ABI for swap functions
-    const routerAbi = [
+    if (config.proxyAddress) {
+      this.proxyContract = new Contract(config.proxyAddress, this.proxyAbi, provider);
+    }
+
+    this.pairsLoadedPromise = new Promise((resolve, reject) => {
+      this.resolvePairsLoaded = resolve;
+      this.rejectPairsLoaded = reject;
+    });
+
+    this.partnerFeeLoadedPromise = new Promise((resolve, reject) => {
+      this.resolvePartnerFeeLoaded = resolve;
+      this.rejectPartnerFeeLoaded = reject;
+    });
+    this.loadAllPairs();
+    this.loadPartnerFee();
+  }
+
+  protected get routerAbi() {
+    return [
       // Swaps (ERC20 <-> ERC20)
       'function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)',
       'function swapTokensForExactTokens(uint amountOut, uint amountInMax, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)',
@@ -51,37 +70,21 @@ export class SwapService {
       // Get WETH
       'function WETH() external pure returns (address)'
     ];
+  }
 
-    // Factory ABI for pair operations
-    const factoryAbi = [
+  protected get factoryAbi() {
+    return [
       'function getPair(address tokenA, address tokenB) external view returns (address pair)',
       'function allPairs(uint) external view returns (address pair)',
       'function allPairsLength() external view returns (uint)'
     ];
+  }
 
-    const proxyAbi = [
-      ...routerAbi,
+  protected get proxyAbi() {
+    return [
+      ...this.routerAbi,
       "function partners(bytes32) external view returns (address feeRecipient, uint16 feeBps)"
-    ];
-
-    this.routerContract = new Contract(config.routerAddress, routerAbi, provider);
-    this.factoryContract = new Contract(config.factoryAddress, factoryAbi, provider);
-
-    if (config.proxyAddress) {
-      this.proxyContract = new Contract(config.proxyAddress, proxyAbi, provider);
-    }
-
-    this.pairsLoadedPromise = new Promise((resolve, reject) => {
-      this.resolvePairsLoaded = resolve;
-      this.rejectPairsLoaded = reject;
-    });
-
-    this.partnerFeeLoadedPromise = new Promise((resolve, reject) => {
-      this.resolvePartnerFeeLoaded = resolve;
-      this.rejectPartnerFeeLoaded = reject;
-    });
-    this.loadAllPairs();
-    this.loadPartnerFee();
+    ]
   }
 
   // parnter fee is BPS_DIVISOR = 10_000n;
@@ -197,7 +200,7 @@ export class SwapService {
         this.rejectPairsLoaded = reject;
       });
 
-      this.loadAllPairs();
+      setTimeout(this.loadAllPairs.bind(this), 1000);
     }
   }
 
@@ -328,6 +331,15 @@ export class SwapService {
     return value;
   }
 
+  protected async getAmountsIn(sellAmountWei: bigint, pathAddresses: string[]): Promise<bigint> {
+    const [aIn] = await this.routerContract.getAmountsIn(sellAmountWei, pathAddresses);
+    return aIn;
+  }
+
+  protected async getAmountsOut(buyAmountWei: bigint, pathAddresses: string[]): Promise<bigint> {
+    const [, aOut] = await this.routerContract.getAmountsOut(buyAmountWei, pathAddresses);
+    return aOut;
+  }
 
   /**
    * 
@@ -380,25 +392,22 @@ export class SwapService {
         isOutputAmount,
       );
 
-      const pathAddresses = trade?.route.path.map(token => token.address);
 
       if (!trade) {
         throw new Error('No trade path found for the given tokens and amount.');
       }
 
+      const pathAddresses = trade.route.path.map(token => token.address);
 
       let amountIn: string = '0';
       let amountOut: string = '0';
 
       if (isOutputAmount) {
-        const [aIn] = await this.routerContract.getAmountsIn(sellAmountWei, pathAddresses);
-        amountIn = String(aIn);
+        amountIn = String(await this.getAmountsIn(sellAmountWei, pathAddresses));
         amountOut = String(parseUnits(targetAmount, buyToken.decimals));
       } else {
-        const [, aOut] = await this.routerContract.getAmountsOut(sellAmountWei, pathAddresses);
-        amountOut = String(aOut);
+        amountOut = String(await this.getAmountsOut(sellAmountWei, pathAddresses));
         amountIn = String(parseUnits(targetAmount, sellToken.decimals));
-        console.log(amountOut, amountIn);
       }
 
       let amounts: ComputedAmounts = {

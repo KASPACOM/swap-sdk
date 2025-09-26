@@ -46,12 +46,12 @@ export class SwapSdkController {
       (this.options.networkConfig as SwapSdkNetworkConfig),
       this.options.walletProvider
     );
-
-    this.swapService = new SwapService(
+    
+    this.swapService = new (this.options.swapServiceClass || SwapService)(
       this.walletService.getProvider()!,
       (this.options.networkConfig as SwapSdkNetworkConfig),
       this.options,
-    );
+    ) as SwapService;
 
     if (this.options.refreshPairsInterval) {
       this.swapService.waitForPairsLoaded().finally(() => {

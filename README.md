@@ -36,7 +36,7 @@ import {
 } from 'swap-widget';
 
 const controller = createKaspaComSwapController({
-  networkConfig: 'kasplex-testnet',
+  networkConfig: 'kasplex',
   walletProvider: window.ethereum, // any EIP-1193 provider
   onChange: async (state, patch) => {
     console.log('state changed', patch, state);
@@ -101,7 +101,7 @@ console.log(tokens);
 ### createKaspaComSwapController(options)
 Creates and returns a `SwapSdkController` instance. Accepts either a preset string for `networkConfig` or a full `SwapSdkNetworkConfig` object.
 
-- **options.networkConfig**: `'kasplex-testnet'` or `SwapSdkNetworkConfig`
+- **options.networkConfig**: `'kasplex-testnet'`, `'kasplex'` or `SwapSdkNetworkConfig`
 - **options.walletProvider**: EIP-1193 provider (e.g., `window.ethereum`)
 - **options.partnerKey?**: Optional partner key string
 - **options.onChange?**: `(state, patch) => Promise<void>` callback invoked on any state change
@@ -221,7 +221,7 @@ All types are exported from `swap-widget`.
     The wrapped native token (WKAS).
 
 - **NETWORKS**
-  - Preset map of network keys to `SwapSdkNetworkConfig` objects. Includes `'kasplex-testnet'`.
+  - Preset map of network keys to `SwapSdkNetworkConfig` objects. Includes `'kasplex-testnet'`, `'kasplex'`.
 
 
 ## Usage Patterns

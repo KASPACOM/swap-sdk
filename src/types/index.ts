@@ -44,6 +44,7 @@ export interface SwapSdkOptions {
   refreshPairsInterval?: number;
   updateQuoteAfterRefreshPairs?: boolean;
   getPairsData?: () => Promise<KaspaComSdkPair[]>;
+  swapServiceClass?: any;
 }
 
 

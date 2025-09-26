@@ -329,7 +329,7 @@
                 // Need this to refresh the ui
                 await new Promise(resolve => setTimeout(requestAnimationFrame(resolve), 0));
                 await new Promise(resolve => setTimeout(requestAnimationFrame(resolve), 0));
-                
+
             } else {
                 swapBtn.style.display = 'block';
                 loadingMessage.style.display = 'none';
@@ -374,7 +374,7 @@
                 networkConfig: 'kasplex-testnet',
                 onChange: updateUIFromState,
                 refreshPairsInterval: 20000,
-                updateQuoteAfterRefreshPairs: true
+                updateQuoteAfterRefreshPairs: true,
             });
 
             // Listen for account changes
