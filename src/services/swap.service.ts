@@ -579,8 +579,6 @@ export class SwapService {
       throw new Error('Please connect wallet first');
     }
 
-    console.log('from the insiddeee', this.routerContractFunctionNames);
-
     try {
       // Round the amounts to the appropriate decimal precision to avoid parseUnits errors
       const deadlineTimestamp = Math.floor(Date.now() / 1000) + (deadline * 60);
