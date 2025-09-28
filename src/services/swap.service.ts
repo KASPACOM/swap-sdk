@@ -49,7 +49,14 @@ export class SwapService {
     this.loadPartnerFee();
   }
 
-  protected get routerContractFunctionNames() {
+  protected get routerContractFunctionNames(): {
+    swapExactTokensForTokens: string;
+    swapTokensForExactTokens: string;
+    swapExactETHForTokens: string;
+    swapETHForExactTokens: string;
+    swapExactTokensForETH: string;
+    swapTokensForExactETH: string;
+  } {
     return {
       swapExactTokensForTokens: 'swapExactTokensForTokens',
       swapTokensForExactTokens: 'swapTokensForExactTokens',
@@ -571,6 +578,8 @@ export class SwapService {
     if (!this.signer) {
       throw new Error('Please connect wallet first');
     }
+
+    console.log('from the insiddeee', this.routerContractFunctionNames);
 
     try {
       // Round the amounts to the appropriate decimal precision to avoid parseUnits errors
