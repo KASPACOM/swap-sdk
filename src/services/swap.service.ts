@@ -49,26 +49,38 @@ export class SwapService {
     this.loadPartnerFee();
   }
 
+  protected get routerContractFunctionNames() {
+    return {
+      swapExactTokensForTokens: 'swapExactTokensForTokens',
+      swapTokensForExactTokens: 'swapTokensForExactTokens',
+      swapExactETHForTokens: 'swapExactETHForTokens',
+      swapETHForExactTokens: 'swapETHForExactTokens',
+      swapExactTokensForETH: 'swapExactTokensForETH',
+      swapTokensForExactETH: 'swapTokensForExactETH',
+      
+    }
+  }
+
   protected get routerAbi() {
     return [
       // Swaps (ERC20 <-> ERC20)
-      'function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)',
-      'function swapTokensForExactTokens(uint amountOut, uint amountInMax, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)',
+      `function ${this.routerContractFunctionNames.swapExactTokensForTokens}(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)`,
+      `function ${this.routerContractFunctionNames.swapTokensForExactTokens}(uint amountOut, uint amountInMax, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)`,
 
       // Swaps (ETH <-> ERC20)
-      'function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)',
-      'function swapETHForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)',
-      'function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)',
-      'function swapTokensForExactETH(uint amountOut, uint amountInMax, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)',
+      `function ${this.routerContractFunctionNames.swapExactETHForTokens}(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)`,
+      `function ${this.routerContractFunctionNames.swapETHForExactTokens}(uint amountOut, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)`,
+      `function ${this.routerContractFunctionNames.swapExactTokensForETH}(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)`,
+      `function ${this.routerContractFunctionNames.swapTokensForExactETH}(uint amountOut, uint amountInMax, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)`,
 
       // Get Amounts
-      'function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts)',
-      'function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut) external pure returns (uint amountOut)',
-      'function getAmountIn(uint amountOut, uint reserveIn, uint reserveOut) internal pure returns (uint amountIn)',
-      'function getAmountsIn(uint amountOut, address[] memory path) internal view returns (uint[] memory amounts)',
+      `function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts)`,
+      `function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut) external pure returns (uint amountOut)`,
+      `function getAmountIn(uint amountOut, uint reserveIn, uint reserveOut) internal pure returns (uint amountIn)`,
+      `function getAmountsIn(uint amountOut, address[] memory path) internal view returns (uint[] memory amounts)`,
 
       // Get WETH
-      'function WETH() external pure returns (address)'
+      `function WETH() external pure returns (address)`
     ];
   }
 
@@ -577,7 +589,7 @@ export class SwapService {
         // Buy mode: user specifies output amount (isOutputAmount === true)
         if (fromToken.address === ethers.ZeroAddress) {
           // ETH -> token (swapETHForExactTokens)
-          swapData = iface.encodeFunctionData("swapETHForExactTokens", [
+          swapData = iface.encodeFunctionData(this.routerContractFunctionNames.swapETHForExactTokens, [
             amountOutWei,
             path,
             to,
@@ -585,7 +597,7 @@ export class SwapService {
           ]);
         } else if (toToken.address === ethers.ZeroAddress) {
           // token -> ETH (swapTokensForExactETH)
-          swapData = iface.encodeFunctionData("swapTokensForExactETH", [
+          swapData = iface.encodeFunctionData(this.routerContractFunctionNames.swapTokensForExactETH, [
             amountOutWei,
             amountInWei,
             path,
@@ -594,7 +606,7 @@ export class SwapService {
           ]);
         } else {
           // token -> token (swapTokensForExactTokens)
-          swapData = iface.encodeFunctionData("swapTokensForExactTokens", [
+          swapData = iface.encodeFunctionData(this.routerContractFunctionNames.swapTokensForExactTokens, [
             amountOutWei,
             amountInWei,
             path,
@@ -605,7 +617,7 @@ export class SwapService {
       } else {
         if (fromToken.address === ethers.ZeroAddress) {
           // ETH -> token
-          swapData = iface.encodeFunctionData("swapExactETHForTokens", [
+          swapData = iface.encodeFunctionData(this.routerContractFunctionNames.swapExactETHForTokens, [
             amountOutWei,
             path,
             to,
@@ -613,7 +625,7 @@ export class SwapService {
           ]);
         } else if (toToken.address === ethers.ZeroAddress) {
           // token -> ETH
-          swapData = iface.encodeFunctionData("swapExactTokensForETH", [
+          swapData = iface.encodeFunctionData(this.routerContractFunctionNames.swapExactTokensForETH, [
             amountInWei,
             amountOutWei,
             path,
@@ -622,7 +634,7 @@ export class SwapService {
           ]);
         } else {
           // token -> token
-          swapData = iface.encodeFunctionData("swapExactTokensForTokens", [
+          swapData = iface.encodeFunctionData(this.routerContractFunctionNames.swapExactTokensForTokens, [
             amountInWei,
             amountOutWei,
             path,
