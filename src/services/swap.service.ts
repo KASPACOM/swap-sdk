@@ -321,7 +321,7 @@ export class SwapService {
     }
 
     const tradeConfig = {
-      maxHops: 3,
+      maxHops: this.swapOptions.maxHops || 3,
       maxNumResults: 1,
     };
 
