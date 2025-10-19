@@ -426,7 +426,6 @@ export class SwapService {
         amountOut = String(parseUnits(targetAmount, buyToken.decimals));
       } else {
         amountOut = String(await this.getAmountsOut(sellAmountWei, pathAddresses));
-        console.log('getAmountsOut', amountOut);
         amountIn = String(parseUnits(targetAmount, sellToken.decimals));
       }
 
