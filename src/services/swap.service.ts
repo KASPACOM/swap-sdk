@@ -356,8 +356,8 @@ export class SwapService {
   }
 
   protected async getAmountsOut(buyAmountWei: bigint, pathAddresses: string[]): Promise<bigint> {
-    const [, aOut] = await this.routerContract.getAmountsOut(buyAmountWei, pathAddresses);
-    return aOut;
+    const results = await this.routerContract.getAmountsOut(buyAmountWei, pathAddresses);
+    return results[results.length - 1];
   }
 
   /**
@@ -426,6 +426,7 @@ export class SwapService {
         amountOut = String(parseUnits(targetAmount, buyToken.decimals));
       } else {
         amountOut = String(await this.getAmountsOut(sellAmountWei, pathAddresses));
+        console.log('getAmountsOut', amountOut);
         amountIn = String(parseUnits(targetAmount, sellToken.decimals));
       }
 

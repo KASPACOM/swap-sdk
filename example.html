@@ -220,6 +220,9 @@
             { address: '0x0000000000000000000000000000000000000000', symbol: 'KAS', name: 'Kaspa', decimals: 18 },
             { address: '0xD33d07ccfEd8038cEd1aa393FbEf7D7dA72be20e', symbol: 'USDT', name: 'Tether', decimals: 6 },
             { address: '0x5266ae5ec8040d7f92c3ddd833e74d4cf3eaf1db', symbol: 'KSCM', name: 'KASPACOM TEST', decimals: 18 },
+            { address: '0x0bc4796ec7869680bb25a00f23b6d2ce07e5f1b9', symbol: 'KASH', name: 'KASHannover', decimals: 18 },
+            { address: '0xaa6947db5fb150a207b85bf7f8718ff0120f60f8', symbol: 'LFG', name: 'LFG', decimals: 18 },
+            { address: '0x4f776b72425094d532e0b4feccd40e3a85ac2929', symbol: 'MAIN', name: 'TEST MAIN', decimals: 18 },
         ];
 
         let controller = null;
@@ -375,6 +378,7 @@
                 onChange: updateUIFromState,
                 refreshPairsInterval: 20000,
                 updateQuoteAfterRefreshPairs: true,
+                partnerKey: '0x4b61737061436f6d54656c656772616d426f7400000000000000000000000000',
             });
 
             // Listen for account changes
