@@ -27,7 +27,8 @@ export const NETWORKS: Record<string, SwapSdkNetworkConfig> = {
       decimals: 18,
       name: 'Kasplex Kaspa',
       symbol: 'KAS',
-    }
+    },
+    isTestnet: true,
   },
   'kasplex': {
     name: 'Kasplex',

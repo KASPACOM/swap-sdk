@@ -100,6 +100,7 @@ export interface SwapSdkNetworkConfig {
   additionalJsonRpcApiProviderOptionsOptions?: any;
   nativeToken: Erc20Token;
   wrappedToken: Erc20Token;
+  isTestnet?: boolean;
 }
 
 export interface KaspaComSdkPair {
