@@ -242,7 +242,7 @@ export class SwapSdkController {
   }
 
 
-  async getTokensFromGraph(limit: number = 100, search?: string) {
+  async getTokensFromGraph(limit?: number, search?: string) {
     if (!this.swapService) {
       throw new Error('Swap Service not exists');
     }
@@ -267,7 +267,7 @@ export class SwapSdkController {
   }
 
   async refreshTokensAndUpdateQuote(forceQuoteUpdate = false) {
-    await this.swapService?.refreshPairsFromGraph();
+    await this.swapService?.refreshPairsFromBackend();
     if ((this.options.updateQuoteAfterRefreshPairs || forceQuoteUpdate) && !this.state.loader) {
       await this.calculateQuoteIfNeeded();
     }

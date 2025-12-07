@@ -95,7 +95,7 @@ export interface SwapSdkNetworkConfig {
   routerAddress: string;
   factoryAddress: string;
   proxyAddress?: string;
-  graphEndpoint: string;
+  badckendApiUrl: string;
   blockExplorerUrl?: string;
   additionalJsonRpcApiProviderOptionsOptions?: any;
   nativeToken: Erc20Token;
@@ -103,22 +103,27 @@ export interface SwapSdkNetworkConfig {
   isTestnet?: boolean;
 }
 
+
+export interface KaspaComSdkToken {
+  id: string;
+  symbol: string;
+  name: string;
+  totalSupply: string;
+  decimals: string;
+  derivedKAS: string;
+};
+
 export interface KaspaComSdkPair {
   id: string;
-  token0: {
-    id: string;
-    symbol: string;
-    name: string;
-    decimals: string | number;
-  };
-  token1: {
-    id: string;
-    symbol: string;
-    name: string;
-    decimals: string | number;
-  };
+  token0: KaspaComSdkToken;
+  token1: KaspaComSdkToken
   reserve0: string;
   reserve1: string;
-  positionValueUsd?: number;
-  totalTokens?: number;
+  totalSupply: string;
+  reserveKAS: string;
+  token0Price: string;
+  token1Price: string;
+  volumeKAS: string;
+  txCount: string;
+  createdAtTimestamp: string;
 }

@@ -1,7 +1,7 @@
 import { BigNumberish, Contract, Signer, BrowserProvider, JsonRpcProvider, parseUnits, formatUnits, ZeroAddress, ethers, hexlify, ContractTransactionResponse, TransactionResponse } from 'ethers';
 import { Currency, CurrencyAmount, Percent, Token, TradeType } from '@uniswap/sdk-core';
 import { Trade, Pair, Route } from '@uniswap/v2-sdk';
-import { ComputedAmounts, Erc20Token, KaspaComSdkPair, SwapSdkNetworkConfig, SwapSdkOptions } from '../types';
+import { ComputedAmounts, Erc20Token, KaspaComSdkPair, KaspaComSdkToken, SwapSdkNetworkConfig, SwapSdkOptions } from '../types';
 import { CustomFeePair } from '../types/CustomFeePair';
 
 export const PARTNER_FEE_BPS_DIVISOR = 10_000n;
@@ -14,6 +14,7 @@ export class SwapService {
   protected proxyContract?: Contract;
   protected chainId: number;
   protected pairs: Pair[] = [];
+  protected tokensByAddress: { [tokenAddress: string]: KaspaComSdkToken } = {};
   protected pairsLoadedPromise: Promise<void>;
   protected resolvePairsLoaded: (() => void) | null = null;
   protected rejectPairsLoaded: ((error: any) => void) | null = null;
@@ -64,7 +65,7 @@ export class SwapService {
       swapETHForExactTokens: 'swapETHForExactTokens',
       swapExactTokensForETH: 'swapExactTokensForETH',
       swapTokensForExactETH: 'swapTokensForExactETH',
-      
+
     }
   }
 
@@ -159,33 +160,19 @@ export class SwapService {
     return num.toFixed(decimals);
   }
 
-  async refreshPairsFromGraph(): Promise<KaspaComSdkPair[]> {
-    // Query for pairs with token info and reserves
-    const query = `{
-      pairs(first: 1000) {
-        id
-        reserve0
-        reserve1
-        token0 { id symbol name decimals }
-        token1 { id symbol name decimals }
-      }
-    }`;
-
-    const response = await fetch(this.config.graphEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query })
+  async refreshPairsFromBackend(): Promise<KaspaComSdkPair[]> {
+    const response = await fetch(`${this.config.badckendApiUrl}/dex/graph-pairs`, {
+      method: 'GET',
     });
     if (!response.ok) throw new Error(`Network error: ${response.status}`);
-    const { data } = await response.json();
-    if (!data || !data.pairs) throw new Error(`No pairs found: ${data}`);
+    const data = await response.json();
+    if (!data) throw new Error(`No pairs found: ${data}`);
 
-    return data.pairs;
-
+    return data;
   }
 
   async refreshPairs(): Promise<void> {
-    const pairsResult = this.swapOptions.getPairsData ? await this.swapOptions.getPairsData() : await this.refreshPairsFromGraph();
+    const pairsResult = this.swapOptions.getPairsData ? await this.swapOptions.getPairsData() : await this.refreshPairsFromBackend();
 
     const pairs: Pair[] = [];
     for (const pair of pairsResult) {
@@ -194,6 +181,11 @@ export class SwapService {
       );
     }
     this.pairs = pairs;
+    this.tokensByAddress = pairsResult.reduce((acc, pair) => {
+      acc[pair.token0.id.toLowerCase()] = pair.token0;
+      acc[pair.token1.id.toLowerCase()] = pair.token1;
+      return acc;
+    }, {} as { [address: string]: KaspaComSdkToken });
   }
 
   /**
@@ -754,40 +746,29 @@ export class SwapService {
    * @param graphEndpoint The GraphQL endpoint URL
    * @param search Optional search string for symbol or name
    */
-  async getTokensFromGraph(limit: number = 100, search?: string): Promise<Erc20Token[]> {
-    const finalLimit = Math.min(limit, 1000);
-    const query = `{
-      tokens(first: ${finalLimit}, where: {
-        ${search ? `or: [
-          { symbol_contains_nocase: \"${search}\" }
-          { name_contains_nocase: \"${search}\" }
-        ]` : ''}
-      }) {
-        id
-        symbol
-        name
-        decimals
-      }
-    }`;
-    try {
-      const response = await fetch(this.config.graphEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query })
-      });
-      if (!response.ok) throw new Error(`Network error: ${response.status}`);
-      const { data } = await response.json();
-      if (!data || !data.tokens) return [];
-      return data.tokens.map((token: any) => ({
-        address: token.id,
-        symbol: token.symbol,
-        name: token.name,
-        decimals: Number(token.decimals),
-      }));
-    } catch (error) {
-      console.error('Error fetching tokens from graph:', error);
-      return [];
+  async getTokensFromGraph(limit?: number, search?: string): Promise<Erc20Token[]> {
+    await this.waitForPairsLoaded();
+    const allTokens = Object.values(this.tokensByAddress);
+
+
+    let result = allTokens;
+
+    if (search) {
+      const searchLowerCase = search.toLowerCase();
+      result = result.filter(token => token.symbol.toLowerCase().includes(searchLowerCase) ||
+        token.name.toLowerCase().includes(searchLowerCase));
     }
+
+    if (limit) {
+      result = result.slice(0, limit);
+    }
+
+    return result.map(token => ({
+      address: token.id,
+      name: token.name,
+      symbol: token.symbol,
+      decimals: Number.parseInt(token.decimals, 10)
+    }));
   }
 
 

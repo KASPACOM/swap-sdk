@@ -381,6 +381,8 @@
                 partnerKey: '0x4b61737061436f6d54656c656772616d426f7400000000000000000000000000',
             });
 
+            window.controller = controller; // For testing purposes
+
             // Listen for account changes
             window.ethereum.on('accountsChanged', (accounts) => {
                 console.log('accounts changed', accounts);
