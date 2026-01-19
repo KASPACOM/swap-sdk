@@ -101,7 +101,7 @@ console.log(tokens);
 ### createKaspaComSwapController(options)
 Creates and returns a `SwapSdkController` instance. Accepts either a preset string for `networkConfig` or a full `SwapSdkNetworkConfig` object.
 
-- **options.networkConfig**: `'kasplex-testnet'`, `'kasplex'` or `SwapSdkNetworkConfig`
+- **options.networkConfig**: `'kasplex-testnet'`, `'igra-testnet'`, `'kasplex'` or `SwapSdkNetworkConfig`
 - **options.walletProvider**: EIP-1193 provider (e.g., `window.ethereum`)
 - **options.partnerKey?**: Optional partner key string
 - **options.onChange?**: `(state, patch) => Promise<void>` callback invoked on any state change
