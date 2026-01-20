@@ -101,6 +101,7 @@ export interface SwapSdkNetworkConfig {
   nativeToken: Erc20Token;
   wrappedToken: Erc20Token;
   isTestnet?: boolean;
+  defiApiNetworkName: string;
 }
 
 

@@ -29,6 +29,7 @@ export const NETWORKS: Record<string, SwapSdkNetworkConfig> = {
       symbol: 'KAS',
     },
     isTestnet: true,
+    defiApiNetworkName: 'kasplex',
   },
   'igra-testnet': {
     name: 'Igra Caravel',
@@ -55,6 +56,7 @@ export const NETWORKS: Record<string, SwapSdkNetworkConfig> = {
       symbol: 'IKAS',
     },
     isTestnet: true,
+    defiApiNetworkName: 'igra',
   },
   'kasplex': {
     name: 'Kasplex',
@@ -81,7 +83,8 @@ export const NETWORKS: Record<string, SwapSdkNetworkConfig> = {
       decimals: 18,
       name: 'Kasplex Kaspa',
       symbol: 'KAS',
-    }
+    },
+    defiApiNetworkName: 'kasplex',
   }
   // Add more networks as needed
 }; 
