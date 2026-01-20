@@ -573,7 +573,8 @@ export class SwapService {
 
     try {
       // Round the amounts to the appropriate decimal precision to avoid parseUnits errors
-      const deadlineTimestamp = Math.floor(Date.now() / 1000) + (deadline * 60);
+      const block = await this.provider.getBlock('latest')
+      const deadlineTimestamp = (block?.timestamp || Math.floor(Date.now() / 1000)) + (deadline * 60);
 
       let tx;
       const signerAddress = await this.signer.getAddress();
