@@ -161,7 +161,7 @@ export class SwapService {
   }
 
   async refreshPairsFromBackend(): Promise<KaspaComSdkPair[]> {
-    const response = await fetch(`${this.config.badckendApiUrl}/dex/graph-pairs`, {
+    const response = await fetch(`${this.config.badckendApiUrl}/dex/graph-pairs?network=${this.config.defiApiNetworkName}`, {
       method: 'GET',
     });
     if (!response.ok) throw new Error(`Network error: ${response.status}`);
