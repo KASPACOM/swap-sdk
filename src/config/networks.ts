@@ -32,14 +32,14 @@ export const NETWORKS: Record<string, SwapSdkNetworkConfig> = {
     defiApiNetworkName: 'kasplex',
   },
   'igra-testnet': {
-    name: 'Igra Caravel',
-    chainId: 19416,
-    rpcUrl: 'https://caravel.igralabs.com:8545',
+    name: 'Igra Galleon',
+    chainId: 38836,
+    rpcUrl: 'https://galleon-testnet.igralabs.com:8545',
     routerAddress: '0x9a5514828a3c2b36920b7c4fe0d6bd7fe8e8924f',
     factoryAddress: '0x1a8136A6da6CA7fe8960c4d098d90Ba2BA712B9F',
     proxyAddress: '0x47f80b6d7071b7738d6dd9d973d7515ce753e9d9',
     badckendApiUrl: 'https://dev-api-defi.kaspa.com',
-    blockExplorerUrl: 'https://explorer.caravel.igralabs.com',
+    blockExplorerUrl: 'https://explorer.galleon-testnet.igralabs.com',
     additionalJsonRpcApiProviderOptionsOptions: {
         batchMaxSize: 0,
     },
