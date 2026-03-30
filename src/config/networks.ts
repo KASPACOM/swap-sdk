@@ -35,16 +35,16 @@ export const NETWORKS: Record<string, SwapSdkNetworkConfig> = {
     name: 'Igra Galleon',
     chainId: 38836,
     rpcUrl: 'https://galleon-testnet.igralabs.com:8545',
-    routerAddress: '0x9a5514828a3c2b36920b7c4fe0d6bd7fe8e8924f',
-    factoryAddress: '0x1a8136A6da6CA7fe8960c4d098d90Ba2BA712B9F',
-    proxyAddress: '0x47f80b6d7071b7738d6dd9d973d7515ce753e9d9',
+    routerAddress: '0x47F80b6D7071B7738D6DD9d973D7515ce753e9d9',
+    factoryAddress: '0xc61aeAdA8888A0e9FF5709A8386c8527CD5065d0',
+    proxyAddress: '0xAC11b74CD03006644e11991C43E78933579fc5fd',
     badckendApiUrl: 'https://dev-api-defi.kaspa.com',
     blockExplorerUrl: 'https://explorer.galleon-testnet.igralabs.com',
     additionalJsonRpcApiProviderOptionsOptions: {
-        batchMaxSize: 0,
+      batchMaxSize: 0,
     },
     wrappedToken: {
-      address: '0x65C280485cA2Ea32aB6A684E2e0646ff1F842A80',
+      address: '0x394C68684F9AFCEb9b804531EF07a864E8081738',
       decimals: 18,
       name: 'Igra Wrapped Kaspa',
       symbol: 'IWKAS',
@@ -85,6 +85,33 @@ export const NETWORKS: Record<string, SwapSdkNetworkConfig> = {
       symbol: 'KAS',
     },
     defiApiNetworkName: 'kasplex',
-  }
+  },
+  'igra': {
+    name: 'Igra',
+    chainId: 38833,
+    rpcUrl: 'https://rpc.igralabs.com:8545',
+    routerAddress: '0x771dfB21e1CD8EA3e8B68cB2469eDaF9548c2523',
+    factoryAddress: '0x21350BcDa9E81731CF4cDE3DbC457e3de2739c01',
+    proxyAddress: '0xDD1aBB133D027f4F67571b5bEEDC9cd9a93C13Ca',
+    badckendApiUrl: 'https://dev-api-defi.kaspa.com',
+    blockExplorerUrl: 'https://explorer.igralabs.com',
+    additionalJsonRpcApiProviderOptionsOptions: {
+      batchMaxSize: 0,
+    },
+    wrappedToken: {
+      address: '0x17Ec7E1768c813E2a3a9b0f94A35605CA520C242',
+      decimals: 18,
+      name: 'Igra Wrapped Kaspa',
+      symbol: 'IWKAS',
+    },
+    nativeToken: {
+      address: ethers.ZeroAddress,
+      decimals: 18,
+      name: 'Igra Kaspa',
+      symbol: 'IKAS',
+    },
+    isTestnet: false,
+    defiApiNetworkName: 'igra',
+  },
   // Add more networks as needed
 }; 
