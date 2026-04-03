@@ -223,6 +223,7 @@
             { address: '0x0bc4796ec7869680bb25a00f23b6d2ce07e5f1b9', symbol: 'KASH', name: 'KASHannover', decimals: 18 },
             { address: '0xaa6947db5fb150a207b85bf7f8718ff0120f60f8', symbol: 'LFG', name: 'LFG', decimals: 18 },
             { address: '0x4f776b72425094d532e0b4feccd40e3a85ac2929', symbol: 'MAIN', name: 'TEST MAIN', decimals: 18 },
+            { address: '0x1516ea6260cc2070d6e716362e0ac593c784e865', symbol: 'SPUDZ', name: 'SPUDVERSE', decimals: 18 }, // IGRA PROD
         ];
 
         let controller = null;
@@ -374,7 +375,7 @@
 
 
             controller = window.KaspaComSwapSdk.createKaspaComSwapController({
-                networkConfig: 'kasplex-testnet',
+                networkConfig: 'igra',
                 onChange: updateUIFromState,
                 refreshPairsInterval: 20000,
                 updateQuoteAfterRefreshPairs: true,
@@ -382,6 +383,11 @@
             });
 
             window.controller = controller; // For testing purposes
+
+
+            controller.getTokensFromGraph(100).then(tokens => {
+                console.log('tokens', tokens);
+            })
 
             // Listen for account changes
             window.ethereum.on('accountsChanged', (accounts) => {

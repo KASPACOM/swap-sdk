@@ -93,7 +93,7 @@ export const NETWORKS: Record<string, SwapSdkNetworkConfig> = {
     routerAddress: '0x771dfB21e1CD8EA3e8B68cB2469eDaF9548c2523',
     factoryAddress: '0x21350BcDa9E81731CF4cDE3DbC457e3de2739c01',
     proxyAddress: '0xDD1aBB133D027f4F67571b5bEEDC9cd9a93C13Ca',
-    badckendApiUrl: 'https://dev-api-defi.kaspa.com',
+    badckendApiUrl: 'https://api-defi.kaspa.com',
     blockExplorerUrl: 'https://explorer.igralabs.com',
     additionalJsonRpcApiProviderOptionsOptions: {
       batchMaxSize: 0,
