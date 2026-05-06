@@ -113,8 +113,9 @@ export class SwapService {
       return this.partnerFee;
     }
     try {
-      if (this.swapOptions.partnerKey && this.proxyContract) {
-        const [, fee] = await this.proxyContract?.partners(this.swapOptions.partnerKey);
+      const partnerKey = this.normalizePartnerKey(this.swapOptions.partnerKey);
+      if (partnerKey && this.proxyContract) {
+        const [, fee] = await this.proxyContract?.partners(partnerKey);
         this.partnerFee = fee;
       }
 
@@ -774,6 +775,22 @@ export class SwapService {
 
 
 
+  private normalizePartnerKey(partnerKey?: string): string | undefined {
+    const trimmed = partnerKey?.trim();
+    if (!trimmed) return undefined;
+
+    if (/^0x[0-9a-fA-F]{64}$/.test(trimmed)) {
+      return trimmed;
+    }
+
+    const utf8Bytes = ethers.toUtf8Bytes(trimmed);
+    if (utf8Bytes.length > 32) {
+      throw new Error('partnerKey must be a bytes32 hex string or UTF-8 text up to 32 bytes');
+    }
+
+    return ethers.hexlify(ethers.zeroPadBytes(utf8Bytes, 32));
+  }
+
   /**
    * Concatenates bytes: selector, array of bytes (each element is Uint8Array), array length (uint8, 1 byte), marker (bytes16(keccak256(markerString)))
    * @param selectorBytes Uint8Array — function selector (usually 4 bytes)
@@ -811,7 +828,7 @@ export class SwapService {
     ];
 
     if (partnerKey) {
-      const partnerKeyBytes = ethers.getBytes(partnerKey); // 32 bytes
+      const partnerKeyBytes = ethers.getBytes(this.normalizePartnerKey(partnerKey)!); // 32 bytes
       const partnerFlagHash = ethers.keccak256(ethers.toUtf8Bytes("PARTNER"));
       const partnerFlagBytes = ethers.getBytes(partnerFlagHash).slice(0, 16); // 16 bytes
       parts.push(partnerKeyBytes, partnerFlagBytes);

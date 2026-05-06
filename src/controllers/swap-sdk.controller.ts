@@ -7,12 +7,17 @@ import {
   SwapControllerInput,
   LoaderStatuses,
   SwapSdkNetworkConfig,
+  ComputedAmounts,
 } from '../types';
 import { Eip1193Provider } from 'ethers';
 
 export const DEFAULT_SETTINGS: SwapSettings = {
   maxSlippage: '0.5',
   swapDeadline: 20,
+}
+
+function getApprovalAmountRaw(computed: ComputedAmounts): string {
+  return computed.maxAmountInRaw || computed.amountInRaw;
 }
 
 export class SwapSdkController {
@@ -142,7 +147,7 @@ export class SwapSdkController {
     if (!this.input || !this.walletService!.isConnected() || !this.swapService) throw new Error('Wallet not connected or input missing');
     const { fromToken, amount } = this.input;
     if (!fromToken || amount === undefined || !this.state.computed?.amountInRaw) throw new Error('fromToken or amount missing');
-    return (await this.swapService!.isApprovalNeeded(fromToken, BigInt(this.state.computed.amountInRaw))).isApprovalNeeded;
+    return (await this.swapService!.isApprovalNeeded(fromToken, BigInt(getApprovalAmountRaw(this.state.computed)))).isApprovalNeeded;
   }
 
   async approveIfNeeded(): Promise<string | undefined> {
@@ -155,7 +160,7 @@ export class SwapSdkController {
     try {
       const tx = await this.swapService?.approveIfNeedApproval(
         fromToken,
-        BigInt(this.state.computed.amountInRaw),
+        BigInt(getApprovalAmountRaw(this.state.computed)),
       )
 
       let receipt;
